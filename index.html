@@ -1,26 +1,822 @@
-round 4 : dan 32 raw, jason 24 ne t, sam 8 net, brandon 8 net.  shawn had a better score but shows ono payout.  it would be nice if it flagged shawn as not net elegible so I can be sure9:34 AMGood progress — Shawn correctly getting nothing is right. But Jason's $24 net is still wrong. At 8 players:
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Cedar Swamp DGL</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Arial,sans-serif;background:#f5f5f5;color:#1a1a1a;font-size:14px}
+.header{background:#1A3A6B;color:#fff;padding:14px 16px;display:flex;align-items:center;justify-content:space-between;position:sticky;top:0;z-index:100}
+.header h1{font-size:17px;font-weight:600}
+.header p{font-size:12px;opacity:.75;margin-top:2px}
+.sync-status{font-size:11px;padding:4px 10px;border-radius:20px;background:rgba(255,255,255,0.15);color:#fff;white-space:nowrap}
+.sync-status.synced{background:rgba(100,255,100,0.2)}
+.sync-status.error{background:rgba(255,100,100,0.2)}
+.nav{display:flex;background:#fff;border-bottom:1px solid #e0e0e0;overflow-x:auto;position:sticky;top:57px;z-index:99}
+.nav button{padding:10px 14px;font-size:12px;border:none;background:transparent;color:#666;cursor:pointer;white-space:nowrap;border-bottom:2px solid transparent}
+.nav button.active{color:#1A3A6B;border-bottom-color:#1A3A6B;font-weight:500}
+.screen{display:none;padding:16px;max-width:800px;margin:0 auto}.screen.active{display:block}
+.metrics{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-bottom:16px}
+.metric{background:#fff;border-radius:10px;padding:12px;text-align:center;border:1px solid #e8e8e8}
+.metric-n{font-size:22px;font-weight:600;color:#1A3A6B}
+.metric-l{font-size:11px;color:#888;margin-top:2px}
+.card{background:#fff;border-radius:12px;padding:14px;margin-bottom:12px;border:1px solid #e8e8e8}
+.shdr{font-size:13px;font-weight:600;color:#1a1a1a;margin-bottom:10px;padding-bottom:8px;border-bottom:1px solid #f0f0f0}
+table{width:100%;border-collapse:collapse;font-size:12px}
+th{background:#f8f8f8;padding:7px 8px;text-align:left;font-weight:500;font-size:11px;color:#666;border-bottom:1px solid #eee}
+td{padding:7px 8px;border-bottom:1px solid #f5f5f5;color:#1a1a1a;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+tr:last-child td{border-bottom:none}
+.badge{display:inline-block;padding:2px 7px;border-radius:6px;font-size:10px;font-weight:500;white-space:nowrap}
+.bp{background:#fff8e1;color:#f57c00}.bn{background:#e8f5e9;color:#2e7d32}
+.bc{background:#ffebee;color:#c62828}.bi{background:#e3f2fd;color:#1565c0}
+.pos{width:20px;height:20px;border-radius:50%;background:#e3f2fd;color:#1565c0;display:inline-flex;align-items:center;justify-content:center;font-size:10px;font-weight:600}
+.upload-zone{border:2px dashed #ccc;border-radius:12px;padding:24px;text-align:center;cursor:pointer;margin-bottom:12px}
+.upload-zone:hover{background:#f8f9ff}
+.upload-zone svg{display:block;margin:0 auto 8px;color:#999}
+.upload-zone p{color:#888;font-size:13px}
+.upload-zone p.sub{font-size:11px;margin-top:4px}
+.fg{display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-bottom:12px}
+.fg label{font-size:11px;color:#666;display:block;margin-bottom:3px;font-weight:500}
+.fg input,.fg select{width:100%;height:36px;border:1px solid #ddd;border-radius:8px;background:#fff;color:#1a1a1a;padding:0 10px;font-size:13px}
+.fg input:focus,.fg select:focus{outline:none;border-color:#1A3A6B}
+.btn-ok{width:100%;padding:10px;background:#2e7d32;color:#fff;border:none;border-radius:8px;cursor:pointer;font-weight:600;font-size:13px}
+.btn-ok:hover{background:#1b5e20}
+.btn-x{padding:10px 16px;border-radius:8px;border:1px solid #ddd;background:#fff;color:#666;cursor:pointer;font-size:13px}
+.btn-exp{padding:7px 14px;border-radius:8px;border:1px solid #1A3A6B;background:#fff;color:#1A3A6B;cursor:pointer;font-size:12px;font-weight:500}
+.btn-exp:hover{background:#e8f0fb}
+.btn-del{padding:4px 10px;border-radius:6px;border:1px solid #ffcdd2;background:#ffebee;color:#c62828;cursor:pointer;font-size:11px;font-weight:500}
+.btn-undo{padding:7px 14px;border-radius:8px;border:1px solid #f57c00;background:#fff8e1;color:#e65100;cursor:pointer;font-size:12px;font-weight:500}
+.ok-banner{padding:12px;background:#e8f5e9;border-radius:8px;color:#2e7d32;font-weight:600;text-align:center;margin-top:12px;font-size:13px}
+.warn-box{padding:8px 12px;background:#fff8e1;border-radius:8px;color:#e65100;font-size:12px;font-weight:500;margin-bottom:10px;border-left:3px solid #f57c00}
+.prov-banner{padding:8px 12px;background:#fff3e0;border-radius:8px;color:#e65100;font-size:12px;font-weight:500;margin-bottom:10px}
+.fr{display:flex;justify-content:space-between;padding:6px 0;font-size:13px;border-bottom:1px solid #f5f5f5}
+.fr:last-child{border-bottom:none}
+.fl{font-size:11px;color:#888;margin-bottom:6px;font-weight:600;text-transform:uppercase;letter-spacing:.04em}
+.rnd-hdr{display:flex;justify-content:space-between;align-items:center;padding:10px 12px;background:#f8f8f8;border-radius:8px;cursor:pointer;margin-bottom:4px;border:1px solid #eee}
+.rnd-hdr:hover{background:#f0f0f0}
+.confirm-del{display:none;padding:10px 12px;background:#ffebee;border-radius:8px;margin-bottom:6px;font-size:12px;border:1px solid #ffcdd2}
+.hint{font-size:11px;color:#888;margin-top:3px}
+.payout-btns{display:flex;gap:6px;margin-bottom:12px}
+.payout-btn{flex:1;padding:8px;border-radius:8px;border:1px solid #ddd;background:#fff;color:#666;cursor:pointer;font-size:12px}
+.payout-btn.active{background:#e3f2fd;color:#1A3A6B;border-color:#1A3A6B;font-weight:500}
+.slider-row{display:flex;align-items:center;gap:12px;margin-bottom:14px}
+.slider-row label{font-size:13px;color:#666;white-space:nowrap}
+.slider-row input{flex:1}
+.slider-row span{font-size:16px;font-weight:600;color:#1A3A6B;min-width:24px;text-align:right}
+.pool-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:12px}
+.pool-box{background:#f8f9ff;border-radius:8px;padding:12px;border:1px solid #e8eaf0}
+.pool-label{font-size:11px;color:#666;margin-bottom:6px;font-weight:600;text-transform:uppercase;letter-spacing:.04em}
+.pnote{font-size:11px;color:#888;padding:8px 10px;background:#f8f8f8;border-radius:8px}
+.variance-ok{color:#2e7d32;font-weight:600}
+.variance-bad{color:#c62828;font-weight:600}
+.diff-pos{color:#c62828}.diff-neg{color:#2e7d32}
+input[type=range]{accent-color:#1A3A6B}
+.add-row{display:flex;gap:8px;margin-top:12px}
+.add-row input{flex:1;height:36px;border:1px solid #ddd;border-radius:8px;padding:0 10px;font-size:13px}
+.add-row button{padding:0 14px;border-radius:8px;border:none;background:#1A3A6B;color:#fff;cursor:pointer;font-size:13px}
+.lock-overlay{display:none;position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.5);z-index:1000;align-items:center;justify-content:center}
+.lock-overlay.show{display:flex}
+.lock-box{background:#fff;border-radius:16px;padding:28px;width:300px;text-align:center}
+.lock-box h2{font-size:18px;font-weight:600;color:#1A3A6B;margin-bottom:8px}
+.lock-box p{font-size:13px;color:#666;margin-bottom:16px}
+.lock-box input{width:100%;height:44px;border:1px solid #ddd;border-radius:8px;padding:0 14px;font-size:15px;text-align:center;letter-spacing:4px;margin-bottom:12px}
+.lock-box input:focus{outline:none;border-color:#1A3A6B}
+.lock-box button{width:100%;padding:12px;background:#1A3A6B;color:#fff;border:none;border-radius:8px;cursor:pointer;font-weight:600;font-size:14px}
+.lock-box .error{color:#c62828;font-size:12px;margin-top:8px;display:none}
+.locked-badge{font-size:11px;padding:3px 8px;background:#fff3e0;color:#e65100;border-radius:6px;margin-left:8px}
+.unlocked-badge{font-size:11px;padding:3px 8px;background:#e8f5e9;color:#2e7d32;border-radius:6px;margin-left:8px}
+</style>
+</head>
+<body>
 
-Net pool = 8 × $5 = $40
-1st net = 50% = $20
-2nd net = 30% = $12
-3rd net = 20% = $8
+<div class="lock-overlay" id="lock-overlay">
+  <div class="lock-box">
+    <h2>Cedar Swamp DGL</h2>
+    <p>Enter the league password to make changes</p>
+    <input type="password" id="pw-input" placeholder="Password" onkeydown="if(event.key==='Enter')checkPw()">
+    <button onclick="checkPw()">Unlock</button>
+    <div class="error" id="pw-error">Wrong password — try again</div>
+    <p style="font-size:11px;color:#aaa;margin-top:12px;cursor:pointer" onclick="closePasswordModal()">View only (no changes)</p>
+  </div>
+</div>
 
-Jason should get $20 not $24. Sam and Brandon at $8 each is also wrong — they tied at net 61 so they should split 2nd and 3rd: ($12 + $8) ÷ 2 = $10 each.
-So correct should be:
+<div class="header">
+  <div>
+    <h1>Cedar Swamp Disc Golf League</h1>
+    <p>Old Saybrook, CT — 2026 Season</p>
+  </div>
+  <div style="display:flex;align-items:center;gap:8px">
+    <span id="sync-status" class="sync-status">Connecting...</span>
+    <span id="auth-badge" class="locked-badge" onclick="showPasswordModal()" style="cursor:pointer">Locked</span>
+  </div>
+</div>
 
-Dan: $32 raw ✅
-Jason: $20 net
-Sam: $10 net (tie split)
-Brandon: $10 net (tie split)
-Shawn: no payout ✅
+<div class="nav">
+  <button class="active" onclick="show('dashboard',this)">Dashboard</button>
+  <button onclick="show('import',this)">Import Round</button>
+  <button onclick="show('history',this)">Round History</button>
+  <button onclick="show('handicaps',this)">Handicaps</button>
+  <button onclick="show('payout',this)">Payouts</button>
+  <button onclick="show('finance',this)">Finance</button>
+  <button onclick="show('roster',this)">Roster</button>
+  <button onclick="show('backup',this)" style="color:#e65100">Backup</button>
+</div>
 
-The $24 for Jason suggests the tie between Sam and Brandon isn't being handled right and is bleeding into Jason's slot. Let me fix both the payout math and add the "no HC" flag display.Ran 4 commandsRan 4 commandsFound it. Line 566 — hcUsed=getHC(p.name) is called at import time, which is correct. But calcRoundPayouts uses p.net from the stored player object. The problem is p.net = p.raw - p.hcUsed is calculated at import time using the HC at that moment — but when we recalculate payouts later for display, we're using the stored p.net value correctly.
-Let me check what's actually in the stored round 4 data:Find the actual bug in net slot calculationFind the actual bug in net slot calculationFound it. The payout tier boundaries are wrong. 8 players is hitting the 6-9 tier which only pays 2 net places at 60/40, giving Jason $24 and Shawn $16. But we agreed on 10+ players for 3 net places. Let me check our original rules and fix:Verify payout math is actually correctVerify payout math is actually correctActually the payouts are mathematically correct — I was wrong earlier. Here's what's happening:
-8 players → 2 net places (60/40) per the original rules:
+<div id="dashboard" class="screen active">
+  <div class="metrics">
+    <div class="metric"><div class="metric-n" id="m-rounds">0</div><div class="metric-l">rounds played</div></div>
+    <div class="metric"><div class="metric-n" id="m-players">0</div><div class="metric-l">players</div></div>
+    <div class="metric"><div class="metric-n" id="m-ace">$0</div><div class="metric-l">ace pot</div></div>
+    <div class="metric"><div class="metric-n" id="m-income">$0</div><div class="metric-l">total collected</div></div>
+  </div>
+  <div class="card">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
+      <div class="shdr" style="margin:0;border:none;padding:0" id="lr-hdr">Last round</div>
+      <button class="btn-undo" id="undo-btn" onclick="requireAuth(undoLastRound)" style="display:none">Undo last round</button>
+    </div>
+    <div id="lr-warn" style="display:none"></div>
+    <div style="overflow-x:auto">
+    <table><thead><tr><th style="width:28px"></th><th>Player</th><th style="width:42px">Raw</th><th style="width:52px">Diff</th><th style="width:38px">HC</th><th style="width:44px">Net</th><th style="width:100px">Payout</th><th style="width:68px">Flag</th></tr></thead>
+    <tbody id="last-round"></tbody></table>
+    </div>
+  </div>
+  <div class="card">
+    <div class="shdr">Season standings</div>
+    <table><thead><tr><th style="width:28px"></th><th>Player</th><th style="width:58px">Rounds</th><th style="width:100px">Status</th><th style="width:48px">HC</th></tr></thead>
+    <tbody id="standings"></tbody></table>
+  </div>
+</div>
 
-Jason 1st net: 60% of $40 = $24 ✅
-Sam + Brandon tied for 2nd: 40% of $40 = $16 split = $8 each ✅
-Total: $24 + $8 + $8 = $40 ✅
+<div id="import" class="screen">
+  <div class="card">
+    <div class="shdr">Import UDisc round</div>
+    <div id="import-lock-msg" style="display:none;padding:10px;background:#fff3e0;border-radius:8px;color:#e65100;font-size:13px;margin-bottom:12px;text-align:center">
+      <strong>Locked</strong> — <span style="cursor:pointer;text-decoration:underline" onclick="showPasswordModal()">Enter password to import rounds</span>
+    </div>
+    <div id="import-content">
+      <div class="upload-zone" onclick="requireAuth(()=>document.getElementById('fin').click())">
+        <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+        <p>Tap to upload UDisc Excel export</p>
+        <p class="sub">Date auto-reads from filename</p>
+      </div>
+      <input type="file" id="fin" accept=".xlsx,.xls" style="display:none" onchange="handleFile(this)">
+      <div class="fg">
+        <div><label>Round #</label><input type="number" id="ir" value="1" min="1" max="12"><div class="hint" id="round-hint"></div></div>
+        <div><label>Layout</label>
+          <select id="il">
+            <option>White</option><option selected>Light Blue</option><option>Blue</option>
+            <option>Green (White)</option><option>Green (Blue)</option>
+          </select>
+        </div>
+        <div><label>Date</label><input type="date" id="id" value="2026-04-02"></div>
+      </div>
+      <div id="iprev" style="display:none">
+        <div class="shdr" style="margin-bottom:8px">Preview — <span id="pmeta" style="font-weight:400;color:#888;font-size:12px"></span></div>
+        <div id="pwarn" style="display:none"></div>
+        <div style="overflow-x:auto">
+        <table><thead><tr><th>Player</th><th style="width:65px">Raw</th><th style="width:75px">vs avg</th><th style="width:100px">Status</th></tr></thead>
+        <tbody id="pb"></tbody></table>
+        </div>
+        <div style="display:flex;gap:8px;margin-top:12px">
+          <button class="btn-ok" onclick="confirmImport()">Confirm &amp; save</button>
+          <button class="btn-x" onclick="document.getElementById('iprev').style.display='none'">Cancel</button>
+        </div>
+      </div>
+      <div id="iok" style="display:none" class="ok-banner">Round saved!</div>
+    </div>
+  </div>
+</div>
 
-The only remaining issue is flagging Shawn as "no HC" in the results so it's visible. That flag should already be there — are you seeing it in the dashboard?
-And one question — at 8 players do you want 2 net places paid (current) or 3? Our original workbook said 6-9 players = top 2 net. But if you'd prefer 3 places at 8 players we can change the tier boundary to 10+ for 3 places.
+<div id="history" class="screen">
+  <div class="card">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
+      <div class="shdr" style="margin:0;border:none;padding:0">Round history</div>
+      <button class="btn-exp" onclick="exportHistory()">Export CSV</button>
+    </div>
+    <div id="history-list"></div>
+  </div>
+</div>
+
+<div id="handicaps" class="screen">
+  <div class="card">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
+      <div class="shdr" style="margin:0;border:none;padding:0">Handicap summary</div>
+      <button class="btn-exp" onclick="exportHC()">Export CSV</button>
+    </div>
+    <table><thead><tr><th>Player</th><th style="width:52px">Rounds</th><th>Last 5 diffs</th><th style="width:42px">HC</th><th style="width:100px">Status</th></tr></thead>
+    <tbody id="hc-table"></tbody></table>
+  </div>
+</div>
+
+<div id="payout" class="screen">
+  <div class="card">
+    <div class="shdr">Payout calculator</div>
+    <div class="payout-btns">
+      <button class="payout-btn active" id="bt-s" onclick="setRT('singles')">Singles</button>
+      <button class="payout-btn" id="bt-p" onclick="setRT('prov')">Provisional</button>
+      <button class="payout-btn" id="bt-d" onclick="setRT('doubles')">Doubles</button>
+    </div>
+    <div class="slider-row">
+      <label>Players tonight</label>
+      <input type="range" min="4" max="25" value="10" step="1" id="pn" oninput="updatePayout()">
+      <span id="pno">10</span>
+    </div>
+    <div class="pool-grid">
+      <div class="pool-box"><div class="pool-label" id="nl">Net pool</div><div id="np"></div></div>
+      <div class="pool-box"><div class="pool-label" id="rl">Raw pool</div><div id="rp"></div></div>
+    </div>
+    <div class="pnote" id="pnote"></div>
+  </div>
+</div>
+
+<div id="finance" class="screen">
+  <div class="card">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
+      <div class="shdr" style="margin:0;border:none;padding:0">Finance summary</div>
+      <button class="btn-exp" onclick="exportFinance()">Export CSV</button>
+    </div>
+    <div style="margin-bottom:14px">
+      <div class="fl">Income</div>
+      <div class="fr"><span>Singles entry fees</span><span id="fsi">$0</span></div>
+      <div class="fr"><span>Doubles entry fees</span><span id="fdi">$0</span></div>
+      <div class="fr"><span style="font-weight:600">Total collected</span><span id="fti" style="font-weight:600">$0</span></div>
+    </div>
+    <div style="margin-bottom:14px">
+      <div class="fl">Payouts</div>
+      <div id="fpr"></div>
+      <div class="fr"><span style="font-weight:600">Total paid out</span><span id="ftp" style="font-weight:600">$0</span></div>
+    </div>
+    <div style="margin-bottom:14px">
+      <div class="fl">Ace pot</div>
+      <div class="fr"><span>Contributions</span><span id="fac">$0</span></div>
+      <div class="fr"><span>Paid out (aces)</span><span id="fap">$0</span></div>
+      <div class="fr"><span style="font-weight:600">Balance</span><span id="fab" style="font-weight:600;color:#2e7d32">$0</span></div>
+    </div>
+    <div style="padding:10px 12px;background:#f8f8f8;border-radius:8px;display:flex;justify-content:space-between;font-size:13px">
+      <span style="color:#666">Variance (should be $0)</span>
+      <span id="fv" style="font-weight:600">$0</span>
+    </div>
+  </div>
+  <div class="card">
+    <div class="shdr">Round by round</div>
+    <div style="overflow-x:auto">
+    <table><thead><tr><th style="width:52px">Round</th><th>Date</th><th style="width:90px">Layout</th><th style="width:58px">Players</th><th style="width:80px">Collected</th><th style="width:80px">Paid out</th></tr></thead>
+    <tbody id="frt"></tbody></table>
+    </div>
+  </div>
+</div>
+
+<div id="roster" class="screen">
+  <div class="card">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
+      <div class="shdr" style="margin:0;border:none;padding:0">Player roster</div>
+      <button class="btn-exp" onclick="exportRoster()">Export CSV</button>
+    </div>
+    <table><thead><tr><th>Player</th><th style="width:58px">Rounds</th><th style="width:65px">Avg raw</th><th style="width:58px">Best</th><th style="width:42px">HC</th></tr></thead>
+    <tbody id="rt"></tbody></table>
+    <div class="add-row">
+      <input type="text" id="np-in" placeholder="Add player name...">
+      <button onclick="requireAuth(addPlayer)">Add</button>
+    </div>
+  </div>
+</div>
+
+<div id="backup" class="screen">
+  <div class="card">
+    <div class="shdr">Export all league data</div>
+    <p style="font-size:13px;color:#666;margin-bottom:12px">Download a complete backup of all rounds, players, and handicaps.</p>
+    <button onclick="exportAllData()" style="width:100%;padding:12px;background:#1A3A6B;color:#fff;border:none;border-radius:8px;cursor:pointer;font-weight:600;font-size:14px;margin-bottom:8px">Export league data (.json)</button>
+  </div>
+  <div class="card">
+    <div class="shdr">Import league data</div>
+    <p style="font-size:13px;color:#666;margin-bottom:12px">Load a backup file. This will <strong>replace</strong> all current data.</p>
+    <div style="border:2px dashed #ccc;border-radius:10px;padding:20px;text-align:center;cursor:pointer;margin-bottom:8px" onclick="requireAuth(()=>document.getElementById('json-in').click())">
+      <p style="color:#888;font-size:13px">Tap to select .json backup file</p>
+    </div>
+    <input type="file" id="json-in" accept=".json" style="display:none" onchange="importAllData(this)">
+    <div id="import-data-status" style="display:none"></div>
+  </div>
+  <div class="card">
+    <div class="shdr" style="color:#c62828">Danger zone</div>
+    <p style="font-size:13px;color:#666;margin-bottom:12px">Clear all data. Cannot be undone without a backup.</p>
+    <button onclick="requireAuth(clearAllData)" style="width:100%;padding:10px;background:#ffebee;color:#c62828;border:1px solid #ffcdd2;border-radius:8px;cursor:pointer;font-weight:500;font-size:13px">Clear all data</button>
+  </div>
+</div>
+
+<script>
+// ── CONFIG ────────────────────────────────────────────────────
+const SUPABASE_URL='https://bshwjorsxqavcdycpgvs.supabase.co';
+const SUPABASE_KEY='eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImJzaHdqb3JzeHFhdmNkeWNwZ3ZzIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzM3NTI2NDYsImV4cCI6MjA4OTMyODY0Nn0.XKGpnF8cQjjw6v3MUZdxLIAuzwsgs87zflv8UcEF0CE';
+const LEAGUE_PASSWORD='cedar2026';
+const ENTRY=10,NET_PP=5,RAW_PP=4,ACE_PP=1,PROV=3,CAP=15,MULT=0.8;
+let RT='singles';
+let authed=false;
+let pendingAuthAction=null;
+
+// ── STATE ─────────────────────────────────────────────────────
+let S={rounds:[],players:{},acePaidOut:0};
+
+// ── SUPABASE ──────────────────────────────────────────────────
+async function sbFetch(method,body=null){
+  const opts={method,headers:{'Content-Type':'application/json','apikey':SUPABASE_KEY,'Authorization':'Bearer '+SUPABASE_KEY}};
+  if(body) opts.body=JSON.stringify(body);
+  const res=await fetch(SUPABASE_URL+'/rest/v1/league_data?id=eq.season_2026',opts);
+  return res;
+}
+
+async function loadFromSupabase(){
+  setSync('Syncing...');
+  try{
+    const res=await sbFetch('GET');
+    const data=await res.json();
+    if(data&&data[0]&&data[0].data){
+      S=data[0].data;
+      setSync('Synced',true);
+    } else {
+      setSync('No data yet',true);
+    }
+  }catch(e){
+    setSync('Offline',false,true);
+    // Fall back to localStorage
+    try{const local=JSON.parse(localStorage.getItem('csdgl_sb')||'null');if(local) S=local;}catch(e2){}
+  }
+  renderDashboard();updateRoundHint();
+}
+
+async function saveToSupabase(){
+  localStorage.setItem('csdgl_sb',JSON.stringify(S));
+  setSync('Saving...');
+  try{
+    const res=await sbFetch('PATCH',{data:S,updated_at:new Date().toISOString()});
+    if(res.ok){setSync('Saved',true);}
+    else{setSync('Save failed',false,true);}
+  }catch(e){
+    setSync('Offline — saved locally',false,true);
+  }
+}
+
+function setSync(msg,ok=false,err=false){
+  const el=document.getElementById('sync-status');
+  el.textContent=msg;
+  el.className='sync-status'+(ok?' synced':err?' error':'');
+}
+
+// ── PASSWORD ──────────────────────────────────────────────────
+function showPasswordModal(){
+  document.getElementById('lock-overlay').classList.add('show');
+  document.getElementById('pw-input').value='';
+  document.getElementById('pw-error').style.display='none';
+  setTimeout(()=>document.getElementById('pw-input').focus(),100);
+}
+
+function closePasswordModal(){
+  document.getElementById('lock-overlay').classList.remove('show');
+  pendingAuthAction=null;
+}
+
+function checkPw(){
+  const pw=document.getElementById('pw-input').value;
+  if(pw===LEAGUE_PASSWORD){
+    authed=true;
+    document.getElementById('lock-overlay').classList.remove('show');
+    document.getElementById('auth-badge').textContent='Unlocked';
+    document.getElementById('auth-badge').className='unlocked-badge';
+    document.getElementById('import-lock-msg').style.display='none';
+    if(pendingAuthAction){pendingAuthAction();pendingAuthAction=null;}
+  } else {
+    document.getElementById('pw-error').style.display='block';
+    document.getElementById('pw-input').value='';
+    document.getElementById('pw-input').focus();
+  }
+}
+
+function requireAuth(action){
+  if(authed){action();return;}
+  pendingAuthAction=action;
+  showPasswordModal();
+}
+
+// ── HELPERS ───────────────────────────────────────────────────
+function fmt(n){return n===Math.floor(n)?'$'+n:'$'+n.toFixed(2);}
+
+function calcHC(diffs){
+  if(!diffs||!diffs.length) return 0;
+  const d=[...diffs].slice(-5);
+  let avg;
+  if(d.length<=3) avg=d.reduce((a,b)=>a+b,0)/d.length;
+  else if(d.length===4) avg=(d.reduce((a,b)=>a+b,0)-Math.max(...d))/3;
+  else avg=(d.reduce((a,b)=>a+b,0)-Math.max(...d)-Math.min(...d))/3;
+  return Math.max(0,Math.min(CAP,Math.round(avg*MULT)));
+}
+
+function getHC(name){const p=S.players[name];return(!p||!p.diffs.length)?0:calcHC(p.diffs);}
+function isPlayerProv(name){const p=S.players[name];return !p||p.rounds.length<PROV;}
+function isRoundProv(rn){return rn<=PROV;}
+
+function updateRoundHint(){
+  const existing=S.rounds.map(r=>r.roundNum);
+  for(let i=1;i<=12;i++){
+    if(!existing.includes(i)){
+      document.getElementById('ir').value=i;
+      document.getElementById('round-hint').textContent='Next missing: Round '+i;
+      return;
+    }
+  }
+  document.getElementById('round-hint').textContent=existing.length+' rounds recorded';
+}
+
+function getNetSlots(n,pool){
+  if(n<6||!pool) return[];
+  if(n<=9) return[pool*.6,pool*.4];
+  if(n<=19) return[pool*.5,pool*.3,pool*.2];
+  return[pool*.45,pool*.3,pool*.15,pool*.1];
+}
+function getRawProvSlots(n,pool){
+  if(n<4) return[pool];
+  if(n<=9) return[pool*.6,pool*.4];
+  if(n<=14) return[pool*.5,pool*.3,pool*.2];
+  return[pool*.45,pool*.3,pool*.15,pool*.1];
+}
+
+function calcRoundPayouts(players,roundNum){
+  const n=players.length,isProvRound=isRoundProv(roundNum);
+  const rawPool=n*(isProvRound?NET_PP+RAW_PP:RAW_PP),netPool=isProvRound?0:n*NET_PP;
+  const payouts={};
+  players.forEach(p=>payouts[p.name]={net:0,raw:0,flags:[]});
+  function roundsBeforeThis(name){return S.rounds.filter(r=>r.roundNum<roundNum&&r.players.some(p=>p.name===name)).length;}
+  function isProvForThisRound(name){
+    const saved=S.rounds.find(r=>r.roundNum===roundNum);
+    if(saved) return roundsBeforeThis(name)<PROV;
+    return isPlayerProv(name);
+  }
+  const rawSorted=[...players].sort((a,b)=>a.raw-b.raw);
+  const rawSlots=isProvRound?getRawProvSlots(n,rawPool):(n>=15?[rawPool*.6,rawPool*.4]:[rawPool]);
+  let ri=0,si=0;
+  while(si<rawSlots.length&&ri<rawSorted.length){
+    const score=rawSorted[ri].raw,tied=[];
+    while(ri<rawSorted.length&&rawSorted[ri].raw===score) tied.push(rawSorted[ri++]);
+    const total=rawSlots.slice(si,si+tied.length).reduce((a,b)=>a+b,0);
+    tied.forEach(p=>payouts[p.name].raw=total/tied.length);
+    si+=tied.length;if(si>=rawSlots.length) break;
+  }
+  if(!isProvRound&&netPool>0){
+    const rawWinners=new Set(Object.entries(payouts).filter(([,v])=>v.raw>0).map(([k])=>k));
+    players.filter(p=>isProvForThisRound(p.name)).forEach(p=>payouts[p.name].flags.push('no-net'));
+    const eligible=players.filter(p=>!isProvForThisRound(p.name)&&!rawWinners.has(p.name));
+    const netSorted=[...eligible].sort((a,b)=>a.net-b.net);
+    const netSlots=getNetSlots(n,netPool);
+    let ni=0,nsi=0;
+    while(nsi<netSlots.length&&ni<netSorted.length){
+      const score=netSorted[ni].net,tied=[];
+      while(ni<netSorted.length&&netSorted[ni].net===score) tied.push(netSorted[ni++]);
+      const total=netSlots.slice(nsi,nsi+tied.length).reduce((a,b)=>a+b,0);
+      tied.forEach(p=>payouts[p.name].net=total/tied.length);
+      nsi+=tied.length;
+    }
+  }
+  players.forEach(p=>{if(payouts[p.name].net>0&&payouts[p.name].raw>0) payouts[p.name].flags.push('double-dip');});
+  return{payouts,isProvRound,rawPool,netPool};
+}
+
+// ── DELETE ────────────────────────────────────────────────────
+function undoLastRound(){
+  if(!S.rounds.length) return;
+  const last=S.rounds[S.rounds.length-1];
+  if(!confirm('Delete Round '+last.roundNum+' ('+last.date+')? This will reverse all player stats.')) return;
+  deleteRoundByIndex(S.rounds.length-1);
+  renderDashboard();updateRoundHint();
+}
+
+function deleteRoundByIndex(idx){
+  const r=S.rounds[idx];
+  r.players.forEach(p=>{
+    if(S.players[p.name]){
+      const pi=S.players[p.name].rounds.lastIndexOf(p.raw);
+      if(pi!==-1){S.players[p.name].rounds.splice(pi,1);S.players[p.name].diffs.splice(pi,1);}
+      if(S.players[p.name].rounds.length===0) delete S.players[p.name];
+    }
+  });
+  S.rounds.splice(idx,1);saveToSupabase();
+}
+
+function confirmDeleteRound(idx){
+  const r=S.rounds[idx];
+  const cd=document.getElementById('cd-'+idx);
+  cd.style.display='block';
+  cd.innerHTML='<span style="color:#c62828;font-weight:600">Delete Round '+r.roundNum+' — '+r.layout+' ('+r.date+', '+r.players.length+' players)?</span><div style="display:flex;gap:8px;margin-top:8px"><button class="btn-del" onclick="requireAuth(()=>doDeleteRound('+idx+'))">Yes, delete</button><button class="btn-x" style="padding:5px 10px;font-size:11px" onclick="document.getElementById(\'cd-'+idx+'\').style.display=\'none\'">Cancel</button></div>';
+}
+
+function doDeleteRound(idx){deleteRoundByIndex(idx);renderHistory();renderDashboard();updateRoundHint();}
+
+// ── NAV ───────────────────────────────────────────────────────
+function show(id,btn){
+  document.querySelectorAll('.screen').forEach(s=>s.classList.remove('active'));
+  document.querySelectorAll('.nav button').forEach(b=>b.classList.remove('active'));
+  document.getElementById(id).classList.add('active');
+  if(btn) btn.classList.add('active');
+  if(id==='import'){
+    updateRoundHint();
+    document.getElementById('import-lock-msg').style.display=authed?'none':'block';
+  }
+  ({dashboard:renderDashboard,history:renderHistory,handicaps:renderHC,payout:updatePayout,finance:renderFinance,roster:renderRoster})[id]?.();
+}
+
+function setRT(t){
+  RT=t;
+  document.getElementById('bt-s').classList.toggle('active',t==='singles');
+  document.getElementById('bt-p').classList.toggle('active',t==='prov');
+  document.getElementById('bt-d').classList.toggle('active',t==='doubles');
+  updatePayout();
+}
+
+// ── PAYOUT CALC ───────────────────────────────────────────────
+function updatePayout(){
+  const n=parseInt(document.getElementById('pn').value);
+  document.getElementById('pno').textContent=n;
+  const isProv=(RT==='prov'),isDbl=(RT==='doubles');
+  const lbl=['1st','2nd','3rd','4th'];
+  const row=(l,v)=>'<div style="display:flex;justify-content:space-between;padding:3px 0;font-size:13px"><span style="color:#888">'+l+'</span><strong>'+v+'</strong></div>';
+  if(isDbl){
+    const pool=n*9,teams=Math.floor(n/2);
+    const slots=teams<=3?[pool]:teams<=5?[pool*.65,pool*.35]:[pool*.5,pool*.3,pool*.2];
+    document.getElementById('nl').textContent='Doubles payout ($9/player)';
+    document.getElementById('rl').textContent='No raw pool';
+    document.getElementById('np').innerHTML=slots.map((p,i)=>row(['1st team','2nd team','3rd team'][i],fmt(p))).join('');
+    document.getElementById('rp').innerHTML='<div style="color:#888;font-size:12px;padding:3px 0">N/A — best disc format</div>';
+    document.getElementById('pnote').textContent='Ace pot: '+fmt(n)+' · Total: '+fmt(n*ENTRY)+' · Solo players use Cali format';
+    return;
+  }
+  const rawPool=n*(isProv?NET_PP+RAW_PP:RAW_PP),netPool=isProv?0:n*NET_PP;
+  document.getElementById('nl').textContent=isProv?'No net (provisional)':'Net pool ($'+NET_PP+'/player)';
+  document.getElementById('rl').textContent=isProv?'Full raw ($'+(NET_PP+RAW_PP)+'/player)':'Raw pool ($'+RAW_PP+'/player)';
+  if(isProv){
+    document.getElementById('np').innerHTML='<div style="color:#e65100;font-size:12px;padding:3px 0">Provisional — full pool to raw. No net.</div>';
+    document.getElementById('rp').innerHTML=getRawProvSlots(n,rawPool).map((p,i)=>row(lbl[i],fmt(p))).join('');
+  }else{
+    document.getElementById('np').innerHTML=getNetSlots(n,netPool).map((p,i)=>row(lbl[i],fmt(p))).join('');
+    const rs=n>=15?[rawPool*.6,rawPool*.4]:[rawPool];
+    document.getElementById('rp').innerHTML=rs.map((p,i)=>row(lbl[i],fmt(p))).join('');
+  }
+  document.getElementById('pnote').textContent='Ace pot: '+fmt(n)+' · Total: '+fmt(n*ENTRY)+' · Ties split exact · Best raw wins raw · No double dips';
+}
+
+// ── RENDER DASHBOARD ──────────────────────────────────────────
+function renderDashboard(){
+  const rds=S.rounds;
+  document.getElementById('m-rounds').textContent=rds.length;
+  document.getElementById('m-players').textContent=Object.keys(S.players).length;
+  const totalAce=rds.reduce((a,r)=>a+r.players.length*ACE_PP,0);
+  document.getElementById('m-ace').textContent=fmt(totalAce-S.acePaidOut);
+  document.getElementById('m-income').textContent=fmt(rds.reduce((a,r)=>a+r.players.length*ENTRY,0));
+  document.getElementById('undo-btn').style.display=rds.length&&authed?'inline-block':'none';
+  const lr=document.getElementById('last-round');
+  if(!rds.length){
+    document.getElementById('lr-warn').style.display='none';
+    document.getElementById('lr-hdr').textContent='Last round';
+    lr.innerHTML='<tr><td colspan="8" style="color:#888;text-align:center;padding:24px;font-size:13px">No rounds yet — import first round</td></tr>';
+    return;
+  }
+  const last=rds[rds.length-1],isProvRound=isRoundProv(last.roundNum);
+  document.getElementById('lr-hdr').textContent='Round '+last.roundNum+' — '+last.layout+', '+last.date;
+  const wb=document.getElementById('lr-warn');
+  if(isProvRound){wb.style.display='block';wb.className='prov-banner';wb.textContent='Provisional round — full '+fmt(last.players.length*(NET_PP+RAW_PP))+' goes to raw only. Net payout starts round '+(PROV+1)+'.';}
+  else wb.style.display='none';
+  const{payouts}=calcRoundPayouts(last.players,last.roundNum);
+  const sorted=[...last.players].sort((a,b)=>isProvRound?(a.raw-b.raw):(a.net-b.net));
+  lr.innerHTML=sorted.map((r,i)=>{
+    const p=payouts[r.name]||{net:0,raw:0,flags:[]};
+    const nb=p.net>0?'<span class="badge bn">'+fmt(p.net)+'</span>':'';
+    const rb=p.raw>0?'<span class="badge bi">'+fmt(p.raw)+'</span>':'';
+    const fl=p.flags.includes('double-dip')?'<span style="color:#c62828;font-size:10px">⚑ dip</span>':p.flags.includes('no-net')?'<span style="color:#f57c00;font-size:10px">no HC</span>':'';
+    const dc=r.diff<=0?'diff-neg':'diff-pos';
+    return'<tr><td><span class="pos">'+(i+1)+'</span></td><td>'+r.name+'</td><td>'+r.raw+'</td><td class="'+dc+'">'+(r.diff>0?'+':'')+r.diff.toFixed(1)+'</td><td>'+(isProvRound?'—':r.hcUsed)+'</td><td style="font-weight:600">'+(isProvRound?'—':r.net)+'</td><td>'+nb+rb+'</td><td>'+fl+'</td></tr>';
+  }).join('');
+  const st=document.getElementById('standings');
+  const ps=Object.entries(S.players).map(([n,p])=>({name:n,rounds:p.rounds.length,hc:calcHC(p.diffs),prov:p.rounds.length<PROV}));
+  ps.sort((a,b)=>b.rounds-a.rounds);
+  st.innerHTML=ps.length?ps.map((p,i)=>'<tr><td><span class="pos">'+(i+1)+'</span></td><td>'+p.name+'</td><td>'+p.rounds+'</td><td><span class="badge '+(p.prov?'bp':'bn')+'">'+(p.prov?'Provisional':'Net eligible')+'</span></td><td>'+(p.hc===0?'<span style="color:#888;font-size:10px">0</span>':'<strong>'+p.hc+'</strong>')+'</td></tr>').join('')
+    :'<tr><td colspan="5" style="color:#888;text-align:center;padding:16px;font-size:13px">No players yet</td></tr>';
+}
+
+function renderHistory(){
+  const hl=document.getElementById('history-list');
+  if(!S.rounds.length){hl.innerHTML='<div style="color:#888;font-size:13px;text-align:center;padding:16px">No rounds yet</div>';return;}
+  const sorted=[...S.rounds].map((r,i)=>({...r,_idx:i})).sort((a,b)=>b.roundNum-a.roundNum);
+  hl.innerHTML=sorted.map(r=>{
+    const idx=r._idx,isProvRound=isRoundProv(r.roundNum);
+    const{payouts}=calcRoundPayouts(r.players,r.roundNum);
+    const sortedP=[...r.players].sort((a,b)=>isProvRound?(a.raw-b.raw):(a.net-b.net));
+    const winners=sortedP.filter(p=>(payouts[p.name].net||0)+(payouts[p.name].raw||0)>0).map(p=>p.name+' '+fmt((payouts[p.name].net||0)+(payouts[p.name].raw||0))).join(' · ');
+    const delBtn=authed?'<button class="btn-del" onclick="event.stopPropagation();confirmDeleteRound('+idx+')">Delete</button>':'';
+    return'<div class="rnd-hdr" onclick="toggleRound(\'rd-'+idx+'\')">'
+      +'<span style="font-weight:600">Round '+r.roundNum+' — '+r.layout+' · '+r.date+' · '+r.players.length+'p'+(isProvRound?' · prov':'')+'</span>'
+      +'<div style="display:flex;align-items:center;gap:8px"><span style="color:#888;font-size:11px">'+(winners||'no payouts')+'</span>'+delBtn+'</div>'
+      +'</div>'
+      +'<div id="cd-'+idx+'" class="confirm-del"></div>'
+      +'<div id="rd-'+idx+'" style="display:none;margin-bottom:8px;overflow-x:auto">'
+      +'<table><thead><tr><th style="width:28px"></th><th>Player</th><th style="width:42px">Raw</th><th style="width:52px">Diff</th><th style="width:38px">HC</th><th style="width:44px">Net</th><th style="width:85px">Payout</th></tr></thead>'
+      +'<tbody>'+sortedP.map((p,i)=>{
+        const pay=payouts[p.name]||{net:0,raw:0};
+        const nb=pay.net>0?'<span class="badge bn">'+fmt(pay.net)+'</span>':'';
+        const rb=pay.raw>0?'<span class="badge bi">'+fmt(pay.raw)+'</span>':'';
+        const dc=p.diff<=0?'diff-neg':'diff-pos';
+        return'<tr><td><span class="pos">'+(i+1)+'</span></td><td>'+p.name+'</td><td>'+p.raw+'</td><td class="'+dc+'">'+(p.diff>0?'+':'')+p.diff.toFixed(1)+'</td><td>'+(isProvRound?'—':p.hcUsed)+'</td><td>'+(isProvRound?'—':p.net)+'</td><td>'+nb+rb+'</td></tr>';
+      }).join('')+'</tbody></table></div>';
+  }).join('');
+}
+
+function toggleRound(id){const el=document.getElementById(id);if(el)el.style.display=el.style.display==='none'?'block':'none';}
+
+function renderHC(){
+  const t=document.getElementById('hc-table');
+  const ps=Object.entries(S.players).map(([n,p])=>({name:n,rounds:p.rounds.length,diffs:p.diffs,hc:calcHC(p.diffs),prov:p.rounds.length<PROV}));
+  t.innerHTML=ps.length?ps.map(p=>{
+    const d5=p.diffs.slice(-5).map(d=>'<span class="'+(d<=0?'diff-neg':'diff-pos')+'">'+(d>0?'+':'')+d.toFixed(1)+'</span>').join(' ');
+    const hb=p.hc>=CAP?'<span class="badge bc">'+p.hc+'</span>':p.hc===0?'<span style="color:#888;font-size:10px">0</span>':'<strong>'+p.hc+'</strong>';
+    return'<tr><td>'+p.name+'</td><td>'+p.rounds+'</td><td style="font-size:11px">'+(d5||'<span style="color:#888">—</span>')+'</td><td>'+hb+'</td><td><span class="badge '+(p.prov?'bp':'bn')+'">'+(p.prov?'Provisional':'Net eligible')+'</span></td></tr>';
+  }).join(''):'<tr><td colspan="5" style="color:#888;text-align:center;padding:16px;font-size:13px">No players yet</td></tr>';
+}
+
+function renderFinance(){
+  const rds=S.rounds.filter(r=>r.type!=='doubles'),dbs=S.rounds.filter(r=>r.type==='doubles');
+  const si=rds.reduce((a,r)=>a+r.players.length*ENTRY,0),di=dbs.reduce((a,r)=>a+r.players.length*ENTRY,0);
+  document.getElementById('fsi').textContent=fmt(si);
+  document.getElementById('fdi').textContent=fmt(di);
+  document.getElementById('fti').textContent=fmt(si+di);
+  let tp=0;
+  const pr=S.rounds.slice().sort((a,b)=>a.roundNum-b.roundNum).map(r=>{
+    const pool=r.type==='doubles'?r.players.length*9:r.players.length*(NET_PP+RAW_PP);
+    tp+=pool;
+    return'<div class="fr"><span>Round '+r.roundNum+' — '+r.layout+' ('+r.players.length+'p'+(isRoundProv(r.roundNum)?' prov':'')+')</span><span>'+fmt(pool)+'</span></div>';
+  }).join('');
+  document.getElementById('fpr').innerHTML=pr||'<div class="fr" style="color:#888"><span>No rounds yet</span><span>$0</span></div>';
+  document.getElementById('ftp').textContent=fmt(tp);
+  const ac=S.rounds.reduce((a,r)=>a+r.players.length*ACE_PP,0);
+  document.getElementById('fac').textContent=fmt(ac);
+  document.getElementById('fap').textContent=fmt(S.acePaidOut);
+  const ab=ac-S.acePaidOut;
+  document.getElementById('fab').textContent=fmt(ab);
+  const v=(si+di)-tp-ab;
+  const vel=document.getElementById('fv');
+  vel.textContent=fmt(v);
+  vel.className=Math.abs(v)<0.01?'variance-ok':'variance-bad';
+  document.getElementById('frt').innerHTML=S.rounds.length?S.rounds.slice().sort((a,b)=>a.roundNum-b.roundNum).map(r=>{
+    const pool=r.type==='doubles'?r.players.length*9:r.players.length*(NET_PP+RAW_PP);
+    return'<tr><td>'+r.roundNum+'</td><td>'+r.date+'</td><td>'+r.layout+'</td><td>'+r.players.length+'</td><td>'+fmt(r.players.length*ENTRY)+'</td><td>'+fmt(pool)+(isRoundProv(r.roundNum)?' (raw)':'')+'</td></tr>';
+  }).join(''):'<tr><td colspan="6" style="color:#888;text-align:center;padding:16px;font-size:13px">No rounds yet</td></tr>';
+}
+
+function renderRoster(){
+  const t=document.getElementById('rt');
+  const ps=Object.entries(S.players).map(([n,p])=>({name:n,rounds:p.rounds.length,avg:p.rounds.length?(p.rounds.reduce((a,b)=>a+b,0)/p.rounds.length).toFixed(1):'-',best:p.rounds.length?Math.min(...p.rounds):'-',hc:calcHC(p.diffs)}));
+  t.innerHTML=ps.length?ps.map(p=>'<tr><td>'+p.name+'</td><td>'+p.rounds+'</td><td>'+p.avg+'</td><td>'+p.best+'</td><td>'+p.hc+'</td></tr>').join(''):'<tr><td colspan="5" style="color:#888;text-align:center;padding:16px;font-size:13px">No players yet</td></tr>';
+}
+
+function addPlayer(){
+  const n=document.getElementById('np-in').value.trim();
+  if(!n) return;
+  if(!S.players[n]) S.players[n]={rounds:[],diffs:[]};
+  document.getElementById('np-in').value='';
+  saveToSupabase();renderRoster();
+}
+
+// ── IMPORT ────────────────────────────────────────────────────
+let pending=null;
+
+function handleFile(input){
+  const file=input.files[0];if(!file) return;
+  const dm=file.name.match(/(\d{4}-\d{2}-\d{2})/);
+  if(dm) document.getElementById('id').value=dm[1];
+  const reader=new FileReader();
+  reader.onload=e=>{
+    const wb=XLSX.read(e.target.result,{type:'array'});
+    const ws=wb.Sheets[wb.SheetNames[0]];
+    const rows=XLSX.utils.sheet_to_json(ws);
+    const players=rows.filter(r=>r.round_total_score&&r.round_total_score>0).map(r=>({name:r.name,raw:r.round_total_score}));
+    const dnf=rows.filter(r=>!r.round_total_score||r.round_total_score===0).map(r=>r.name);
+    if(!players.length){alert('No valid scores found');return;}
+    const avg=players.reduce((a,p)=>a+p.raw,0)/players.length;
+    const rn=parseInt(document.getElementById('ir').value);
+    const isProvRound=isRoundProv(rn);
+    players.forEach(p=>{p.diff=parseFloat((p.raw-avg).toFixed(1));p.hcUsed=getHC(p.name);p.net=p.raw-p.hcUsed;});
+    pending={players,avg:parseFloat(avg.toFixed(1)),roundNum:rn,date:document.getElementById('id').value,dnf};
+    document.getElementById('pmeta').textContent=players.length+' players · field avg '+avg.toFixed(1)+' · '+pending.date+(isProvRound?' · PROVISIONAL (rounds 1-'+PROV+')':'');
+    const pw=document.getElementById('pwarn');
+    if(isProvRound){pw.style.display='block';pw.className='prov-banner';pw.textContent='Provisional round — all '+fmt(players.length*(NET_PP+RAW_PP))+' goes to raw. No net payout.';}
+    else pw.style.display='none';
+    document.getElementById('pb').innerHTML=players.map(p=>'<tr><td>'+p.name+'</td><td style="font-weight:600">'+p.raw+'</td><td class="'+(p.diff<=0?'diff-neg':'diff-pos')+'">'+(p.diff>0?'+':'')+p.diff.toFixed(1)+'</td><td><span class="badge '+(isPlayerProv(p.name)?'bp':'bn')+'">'+(isPlayerProv(p.name)?'Provisional':'Net eligible')+'</span></td></tr>').join('')+(dnf.length?'<tr><td colspan="4" style="color:#888;font-size:11px;padding-top:8px">DNF skipped: '+dnf.join(', ')+'</td></tr>':'');
+    document.getElementById('iprev').style.display='block';
+    document.getElementById('iok').style.display='none';
+  };
+  reader.readAsArrayBuffer(file);
+}
+
+function confirmImport(){
+  if(!pending) return;
+  const layout=document.getElementById('il').value;
+  S.rounds.push({roundNum:pending.roundNum,layout,date:pending.date,fieldAvg:pending.avg,players:[...pending.players],type:'singles'});
+  pending.players.forEach(p=>{
+    if(!S.players[p.name]) S.players[p.name]={rounds:[],diffs:[]};
+    S.players[p.name].rounds.push(p.raw);
+    S.players[p.name].diffs.push(p.diff);
+  });
+  document.getElementById('iprev').style.display='none';
+  document.getElementById('iok').style.display='block';
+  setTimeout(()=>document.getElementById('iok').style.display='none',3000);
+  saveToSupabase();pending=null;
+  renderDashboard();updateRoundHint();
+}
+
+// ── EXPORTS ───────────────────────────────────────────────────
+function downloadCSV(rows,fn){
+  const csv=rows.map(r=>r.map(v=>'"'+String(v).replace(/"/g,'""')+'"').join(',')).join('\n');
+  const a=document.createElement('a');
+  a.href='data:text/csv;charset=utf-8,'+encodeURIComponent(csv);
+  a.download=fn;document.body.appendChild(a);a.click();document.body.removeChild(a);
+}
+
+function exportHistory(){
+  const rows=[['Round','Date','Layout','Player','Raw','Diff','HC Used','Net','Net Payout','Raw Payout','Provisional']];
+  S.rounds.slice().sort((a,b)=>a.roundNum-b.roundNum).forEach(r=>{
+    const isProvRound=isRoundProv(r.roundNum);
+    const{payouts}=calcRoundPayouts(r.players,r.roundNum);
+    r.players.forEach(p=>{
+      const pay=payouts[p.name]||{net:0,raw:0};
+      rows.push([r.roundNum,r.date,r.layout,p.name,p.raw,p.diff.toFixed(1),isProvRound?'—':p.hcUsed,isProvRound?'—':p.net,pay.net?pay.net.toFixed(2):0,pay.raw?pay.raw.toFixed(2):0,isProvRound?'Yes':'No']);
+    });
+  });
+  downloadCSV(rows,'cedar-swamp-round-history.csv');
+}
+
+function exportHC(){
+  const rows=[['Player','Rounds','Diff 1','Diff 2','Diff 3','Diff 4','Diff 5','Current HC','Status']];
+  Object.entries(S.players).forEach(([n,p])=>{
+    const d5=p.diffs.slice(-5);
+    rows.push([n,p.rounds.length,...d5,...Array(5-d5.length).fill(''),calcHC(p.diffs),p.rounds.length<PROV?'Provisional':'Net eligible']);
+  });
+  downloadCSV(rows,'cedar-swamp-handicaps.csv');
+}
+
+function exportFinance(){
+  const rows=[['Round','Date','Layout','Players','Collected','Net Pool','Raw Pool','Ace Pot','Provisional']];
+  S.rounds.slice().sort((a,b)=>a.roundNum-b.roundNum).forEach(r=>{
+    const isP=isRoundProv(r.roundNum);
+    rows.push([r.roundNum,r.date,r.layout,r.players.length,r.players.length*ENTRY,isP?0:r.players.length*NET_PP,isP?r.players.length*(NET_PP+RAW_PP):r.players.length*RAW_PP,r.players.length*ACE_PP,isP?'Yes':'No']);
+  });
+  downloadCSV(rows,'cedar-swamp-finance.csv');
+}
+
+function exportRoster(){
+  const rows=[['Player','Rounds','Avg Raw','Best Raw','Current HC','Status']];
+  Object.entries(S.players).forEach(([n,p])=>{
+    const avg=p.rounds.length?(p.rounds.reduce((a,b)=>a+b,0)/p.rounds.length).toFixed(1):'-';
+    rows.push([n,p.rounds.length,avg,p.rounds.length?Math.min(...p.rounds):'-',calcHC(p.diffs),p.rounds.length<PROV?'Provisional':'Net eligible']);
+  });
+  downloadCSV(rows,'cedar-swamp-roster.csv');
+}
+
+function exportAllData(){
+  const date=new Date().toISOString().slice(0,10);
+  const data=JSON.stringify({...S,exportedAt:new Date().toISOString(),version:1});
+  const a=document.createElement('a');
+  a.href='data:application/json;charset=utf-8,'+encodeURIComponent(data);
+  a.download='cedar-swamp-'+date+'.json';
+  document.body.appendChild(a);a.click();document.body.removeChild(a);
+}
+
+function importAllData(input){
+  const file=input.files[0];if(!file) return;
+  const reader=new FileReader();
+  reader.onload=e=>{
+    try{
+      const data=JSON.parse(e.target.result);
+      if(!data.rounds||!data.players){alert('Invalid backup file');return;}
+      if(!confirm('Replace ALL current data with backup from '+(data.exportedAt?data.exportedAt.slice(0,10):'unknown')+'?')) return;
+      S.rounds=data.rounds||[];S.players=data.players||{};S.acePaidOut=data.acePaidOut||0;
+      saveToSupabase();
+      const status=document.getElementById('import-data-status');
+      status.style.cssText='display:block;padding:10px;background:#e8f5e9;border-radius:8px;color:#2e7d32;font-weight:600;font-size:13px;margin-top:8px';
+      status.textContent='Imported — '+S.rounds.length+' rounds, '+Object.keys(S.players).length+' players.';
+      renderDashboard();updateRoundHint();
+      setTimeout(()=>status.style.display='none',5000);
+    }catch(err){alert('Could not read file: '+err.message);}
+  };
+  reader.readAsText(file);
+}
+
+function clearAllData(){
+  if(!confirm('Clear ALL data? Cannot be undone without a backup.')) return;
+  if(!confirm('Are you absolutely sure?')) return;
+  S={rounds:[],players:{},acePaidOut:0};
+  saveToSupabase();renderDashboard();updateRoundHint();
+  alert('All data cleared.');
+}
+
+// ── INIT ──────────────────────────────────────────────────────
+loadFromSupabase();
+updatePayout();
+</script>
+</body>
+</html>
