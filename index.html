@@ -304,6 +304,18 @@ function calcRoundPayouts(players,roundNum){
   const rawPool=n*(isProvRound?NET_PP+RAW_PP:RAW_PP),netPool=isProvRound?0:n*NET_PP;
   const payouts={};
   players.forEach(p=>payouts[p.name]={net:0,raw:0,flags:[]});
+  // Count rounds completed BEFORE this round to determine provisional status
+  // This prevents a player's current round from counting toward their own eligibility
+  function roundsBeforeThis(name){
+    return S.rounds.filter(r=>r.roundNum<roundNum&&r.players.some(p=>p.name===name)).length;
+  }
+  function isProvForThisRound(name){
+    // If this round is already saved, use saved round count prior to it
+    const saved=S.rounds.find(r=>r.roundNum===roundNum);
+    if(saved) return roundsBeforeThis(name)<PROV;
+    // If not yet saved (import preview), use current player history
+    return isPlayerProv(name);
+  }
   const rawSorted=[...players].sort((a,b)=>a.raw-b.raw);
   const rawSlots=isProvRound?getRawProvSlots(n,rawPool):(n>=15?[rawPool*.6,rawPool*.4]:[rawPool]);
   let ri=0,si=0;
@@ -317,8 +329,8 @@ function calcRoundPayouts(players,roundNum){
   }
   if(!isProvRound&&netPool>0){
     const rawWinners=new Set(Object.entries(payouts).filter(([,v])=>v.raw>0).map(([k])=>k));
-    players.filter(p=>isPlayerProv(p.name)).forEach(p=>payouts[p.name].flags.push('no-net'));
-    const eligible=players.filter(p=>!isPlayerProv(p.name)&&!rawWinners.has(p.name));
+    players.filter(p=>isProvForThisRound(p.name)).forEach(p=>payouts[p.name].flags.push('no-net'));
+    const eligible=players.filter(p=>!isProvForThisRound(p.name)&&!rawWinners.has(p.name));
     const netSorted=[...eligible].sort((a,b)=>a.net-b.net);
     const netSlots=getNetSlots(n,netPool);
     let ni=0,nsi=0;
@@ -552,8 +564,8 @@ function handleFile(input){
     const rn=parseInt(document.getElementById('ir').value);
     const isProvRound=isRoundProv(rn);
     players.forEach(p=>{p.diff=parseFloat((p.raw-avg).toFixed(1));p.hcUsed=getHC(p.name);p.net=p.raw-p.hcUsed;});
-    pending={players,avg:parseFloat(avg.toFixed(1)),roundNum:rn,layout:document.getElementById('il').value,date:document.getElementById('id').value,dnf};
-    document.getElementById('pmeta').textContent=players.length+' players · field avg '+avg.toFixed(1)+' · '+pending.date+(isProvRound?' · PROVISIONAL (rounds 1-'+PROV+')':'');
+    pending={players,avg:parseFloat(avg.toFixed(1)),roundNum:rn,date:document.getElementById('id').value,dnf};
+    document.getElementById('pmeta').textContent=players.length+' players · field avg '+avg.toFixed(1)+' · '+document.getElementById('id').value+(isProvRound?' · PROVISIONAL (rounds 1-'+PROV+')':'');
     const pw=document.getElementById('pwarn');
     if(isProvRound){pw.style.display='block';pw.className='prov-banner';pw.textContent='Provisional round — all '+fmt(players.length*(NET_PP+RAW_PP))+' goes to raw. No net payout.';}
     else pw.style.display='none';
@@ -566,7 +578,8 @@ function handleFile(input){
 
 function confirmImport(){
   if(!pending) return;
-  S.rounds.push({roundNum:pending.roundNum,layout:pending.layout,date:pending.date,fieldAvg:pending.avg,players:[...pending.players],type:'singles'});
+  const layout=document.getElementById('il').value;
+  S.rounds.push({roundNum:pending.roundNum,layout:layout,date:pending.date,fieldAvg:pending.avg,players:[...pending.players],type:'singles'});
   pending.players.forEach(p=>{
     if(!S.players[p.name]) S.players[p.name]={rounds:[],diffs:[]};
     S.players[p.name].rounds.push(p.raw);
