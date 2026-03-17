@@ -5,6 +5,8 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Cedar Swamp DGL</title>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<script src="https://accounts.google.com/gsi/client" async defer></script>
+<script src="https://accounts.google.com/gsi/client" async defer></script>
 <style>
 *{box-sizing:border-box;margin:0;padding:0}
 body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Arial,sans-serif;background:#f5f5f5;color:#1a1a1a;font-size:14px}
@@ -285,9 +287,27 @@ input[type=range]{accent-color:#1A3A6B}
 
 <div id="backup" class="screen">
   <div class="card">
+    <div class="shdr">Sync to Google Sheets</div>
+    <p style="font-size:13px;color:#666;margin-bottom:12px">Push all league data to a Google Sheet in your Drive. Creates or updates a sheet called "Cedar Swamp DGL 2026".</p>
+    <button id="sheets-btn" onclick="requireAuth(syncToSheets)" style="width:100%;padding:12px;background:#0f9d58;color:#fff;border:none;border-radius:8px;cursor:pointer;font-weight:600;font-size:14px;margin-bottom:8px">Sync to Google Sheets</button>
+    <div id="sheets-status" style="display:none"></div>
+  </div>
+  <div class="card">
     <div class="shdr">Export all league data</div>
     <p style="font-size:13px;color:#666;margin-bottom:12px">Download a complete backup of all rounds, players, and handicaps.</p>
     <button onclick="exportAllData()" style="width:100%;padding:12px;background:#1A3A6B;color:#fff;border:none;border-radius:8px;cursor:pointer;font-weight:600;font-size:14px;margin-bottom:8px">Export league data (.json)</button>
+  </div>
+  <div class="card">
+    <div class="shdr">Sync to Google Sheets</div>
+    <p style="font-size:13px;color:#666;margin-bottom:12px">Push all league data to a Google Sheet in your Drive. Creates or updates "Cedar Swamp DGL 2026" automatically.</p>
+    <div id="gs-status" style="display:none;padding:10px;border-radius:8px;font-size:13px;margin-bottom:12px"></div>
+    <button onclick="syncToSheets()" id="gs-btn" style="width:100%;padding:12px;background:#0F9D58;color:#fff;border:none;border-radius:8px;cursor:pointer;font-weight:600;font-size:14px;display:flex;align-items:center;justify-content:center;gap:8px">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="white"><path d="M19 3H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm-7 14H7v-2h5v2zm5-4H7v-2h10v2zm0-4H7V7h10v2z"/></svg>
+      Sync to Google Sheets
+    </button>
+    <p style="font-size:11px;color:#888;text-align:center;margin-top:8px">First time will ask you to sign in with Google</p>
+  </div>
+  <div class="card" style="display:none">
   </div>
   <div class="card">
     <div class="shdr">Import league data</div>
@@ -812,6 +832,263 @@ function clearAllData(){
   S={rounds:[],players:{},acePaidOut:0};
   saveToSupabase();renderDashboard();updateRoundHint();
   alert('All data cleared.');
+}
+
+
+// ── GOOGLE SHEETS SYNC ────────────────────────────────────────
+const GOOGLE_CLIENT_ID='233739054449-89njt6sentb9gbme648faevvkvd0aae9.apps.googleusercontent.com';
+const SHEETS_SCOPE='https://www.googleapis.com/auth/spreadsheets https://www.googleapis.com/auth/drive.file';
+let googleToken=null;
+let sheetId=null;
+
+function setSheetStatus(msg,ok=false,err=false){
+  const el=document.getElementById('sheets-status');
+  el.style.display='block';
+  el.style.cssText='display:block;padding:10px;border-radius:8px;font-size:13px;font-weight:500;margin-top:8px;'+(ok?'background:#e8f5e9;color:#2e7d32':err?'background:#ffebee;color:#c62828':'background:#e3f2fd;color:#1565c0');
+  el.textContent=msg;
+}
+
+function syncToSheets(){
+  setSheetStatus('Connecting to Google...');
+  const client=google.accounts.oauth2.initTokenClient({
+    client_id:GOOGLE_CLIENT_ID,
+    scope:SHEETS_SCOPE,
+    callback:async(resp)=>{
+      if(resp.error){setSheetStatus('Google auth failed: '+resp.error,false,true);return;}
+      googleToken=resp.access_token;
+      await doSheetSync();
+    }
+  });
+  client.requestAccessToken();
+}
+
+async function doSheetSync(){
+  setSheetStatus('Finding or creating spreadsheet...');
+  try{
+    // Find existing sheet or create new one
+    const searchRes=await fetch('https://www.googleapis.com/drive/v3/files?q=name%3D%22Cedar+Swamp+DGL+2026%22+and+mimeType%3D%22application%2Fvnd.google-apps.spreadsheet%22&fields=files(id,name)',{
+      headers:{'Authorization':'Bearer '+googleToken}
+    });
+    const searchData=await searchRes.json();
+    
+    if(searchData.files&&searchData.files.length>0){
+      sheetId=searchData.files[0].id;
+      setSheetStatus('Found existing sheet, updating...');
+    } else {
+      setSheetStatus('Creating new spreadsheet...');
+      const createRes=await fetch('https://sheets.googleapis.com/v4/spreadsheets',{
+        method:'POST',
+        headers:{'Authorization':'Bearer '+googleToken,'Content-Type':'application/json'},
+        body:JSON.stringify({
+          properties:{title:'Cedar Swamp DGL 2026'},
+          sheets:[
+            {properties:{title:'Round History'}},
+            {properties:{title:'Handicaps'}},
+            {properties:{title:'Finance'}},
+            {properties:{title:'Roster'}}
+          ]
+        })
+      });
+      const createData=await createRes.json();
+      sheetId=createData.spreadsheetId;
+    }
+    
+    setSheetStatus('Writing data...');
+    await writeAllSheets();
+    setSheetStatus('Synced! Open in Google Sheets ↗',true);
+    document.getElementById('sheets-btn').textContent='Open Google Sheet';
+    document.getElementById('sheets-btn').onclick=()=>window.open('https://docs.google.com/spreadsheets/d/'+sheetId);
+  } catch(e){
+    setSheetStatus('Sync failed: '+e.message,false,true);
+  }
+}
+
+async function writeSheet(sheetName,rows){
+  // Clear then write
+  await fetch('https://sheets.googleapis.com/v4/spreadsheets/'+sheetId+'/values/'+encodeURIComponent(sheetName)+'!A1:Z1000:clear',{
+    method:'POST',headers:{'Authorization':'Bearer '+googleToken,'Content-Type':'application/json'}
+  });
+  await fetch('https://sheets.googleapis.com/v4/spreadsheets/'+sheetId+'/values/'+encodeURIComponent(sheetName)+'!A1?valueInputOption=RAW',{
+    method:'PUT',
+    headers:{'Authorization':'Bearer '+googleToken,'Content-Type':'application/json'},
+    body:JSON.stringify({values:rows})
+  });
+}
+
+async function writeAllSheets(){
+  // Round History
+  const histRows=[['Round','Date','Layout','Player','Raw','Diff','HC Used','Net','Net Payout','Raw Payout','Provisional']];
+  S.rounds.slice().sort((a,b)=>a.roundNum-b.roundNum).forEach(r=>{
+    const isP=isRoundProv(r.roundNum);
+    const{payouts}=calcRoundPayouts(r.players,r.roundNum);
+    r.players.forEach(p=>{
+      const pay=payouts[p.name]||{net:0,raw:0};
+      histRows.push([r.roundNum,r.date,r.layout,p.name,p.raw,p.diff.toFixed(1),isP?'—':p.hcUsed,isP?'—':p.net,pay.net?pay.net.toFixed(2):0,pay.raw?pay.raw.toFixed(2):0,isP?'Yes':'No']);
+    });
+  });
+  await writeSheet('Round History',histRows);
+
+  // Handicaps
+  const hcRows=[['Player','Rounds','Diff 1','Diff 2','Diff 3','Diff 4','Diff 5','Current HC','Status']];
+  Object.entries(S.players).forEach(([n,p])=>{
+    const d5=p.diffs.slice(-5);
+    hcRows.push([n,p.rounds.length,...d5,...Array(5-d5.length).fill(''),calcHC(p.diffs),p.rounds.length<PROV?'Provisional':'Net eligible']);
+  });
+  await writeSheet('Handicaps',hcRows);
+
+  // Finance
+  const finRows=[['Round','Date','Layout','Players','Collected','Net Pool','Raw Pool','Ace Pot','Provisional']];
+  S.rounds.slice().sort((a,b)=>a.roundNum-b.roundNum).forEach(r=>{
+    const isP=isRoundProv(r.roundNum);
+    finRows.push([r.roundNum,r.date,r.layout,r.players.length,r.players.length*ENTRY,isP?0:r.players.length*NET_PP,isP?r.players.length*(NET_PP+RAW_PP):r.players.length*RAW_PP,r.players.length*ACE_PP,isP?'Yes':'No']);
+  });
+  await writeSheet('Finance',finRows);
+
+  // Roster
+  const rostRows=[['Player','Rounds','Avg Raw','Best Raw','Current HC','Status']];
+  Object.entries(S.players).forEach(([n,p])=>{
+    const avg=p.rounds.length?(p.rounds.reduce((a,b)=>a+b,0)/p.rounds.length).toFixed(1):'-';
+    rostRows.push([n,p.rounds.length,avg,p.rounds.length?Math.min(...p.rounds):'-',calcHC(p.diffs),p.rounds.length<PROV?'Provisional':'Net eligible']);
+  });
+  await writeSheet('Roster',rostRows);
+}
+
+
+// ── GOOGLE SHEETS SYNC ────────────────────────────────────────
+const GS_CLIENT_ID='233739054449-89njt6sentb9gbme648faevvkvd0aae9.apps.googleusercontent.com';
+const GS_SCOPES='https://www.googleapis.com/auth/spreadsheets https://www.googleapis.com/auth/drive.file';
+let gsToken=null;
+let gsSheetId=localStorage.getItem('csdgl_sheet_id')||null;
+
+function gsSignIn(){
+  return new Promise((resolve,reject)=>{
+    const client=google.accounts.oauth2.initTokenClient({
+      client_id:GS_CLIENT_ID,
+      scope:GS_SCOPES,
+      callback:(response)=>{
+        if(response.error){reject(response.error);return;}
+        gsToken=response.access_token;
+        resolve(response.access_token);
+      }
+    });
+    client.requestAccessToken();
+  });
+}
+
+function gsSetStatus(msg,ok=false,err=false){
+  const el=document.getElementById('gs-status');
+  el.style.display='block';
+  el.style.background=ok?'#e8f5e9':err?'#ffebee':'#fff8e1';
+  el.style.color=ok?'#2e7d32':err?'#c62828':'#e65100';
+  el.textContent=msg;
+}
+
+async function gsApi(method,url,body=null){
+  const opts={method,headers:{'Authorization':'Bearer '+gsToken,'Content-Type':'application/json'}};
+  if(body) opts.body=JSON.stringify(body);
+  const res=await fetch(url,opts);
+  return res.json();
+}
+
+async function findOrCreateSheet(){
+  // Search for existing sheet
+  if(gsSheetId){
+    try{
+      const check=await gsApi('GET','https://sheets.googleapis.com/v4/spreadsheets/'+gsSheetId+'?fields=spreadsheetId');
+      if(check.spreadsheetId) return gsSheetId;
+    }catch(e){}
+  }
+  // Create new sheet
+  gsSetStatus('Creating Google Sheet...');
+  const res=await gsApi('POST','https://sheets.googleapis.com/v4/spreadsheets',{
+    properties:{title:'Cedar Swamp DGL 2026'},
+    sheets:[
+      {properties:{title:'Round History'}},
+      {properties:{title:'Handicaps'}},
+      {properties:{title:'Finance'}},
+      {properties:{title:'Roster'}}
+    ]
+  });
+  gsSheetId=res.spreadsheetId;
+  localStorage.setItem('csdgl_sheet_id',gsSheetId);
+  return gsSheetId;
+}
+
+async function writeSheet(sheetId,sheetName,rows){
+  // Clear then write
+  await gsApi('POST','https://sheets.googleapis.com/v4/spreadsheets/'+sheetId+'/values/'+encodeURIComponent(sheetName)+'!A1:Z1000:clear',{});
+  await gsApi('PUT','https://sheets.googleapis.com/v4/spreadsheets/'+sheetId+'/values/'+encodeURIComponent(sheetName)+'!A1?valueInputOption=RAW',{values:rows});
+  // Bold header row
+  const sheetRes=await gsApi('GET','https://sheets.googleapis.com/v4/spreadsheets/'+sheetId+'?fields=sheets.properties');
+  const sheet=sheetRes.sheets.find(s=>s.properties.title===sheetName);
+  if(sheet){
+    await gsApi('POST','https://sheets.googleapis.com/v4/spreadsheets/'+sheetId+':batchUpdate',{
+      requests:[{repeatCell:{range:{sheetId:sheet.properties.sheetId,startRowIndex:0,endRowIndex:1},cell:{userEnteredFormat:{textFormat:{bold:true},backgroundColor:{red:0.1,green:0.23,blue:0.42}}},fields:'userEnteredFormat(textFormat,backgroundColor)'}}]
+    });
+  }
+}
+
+async function syncToSheets(){
+  const btn=document.getElementById('gs-btn');
+  btn.disabled=true;btn.textContent='Syncing...';
+  try{
+    gsSetStatus('Signing in to Google...');
+    if(!gsToken) await gsSignIn();
+    gsSetStatus('Finding or creating spreadsheet...');
+    const sheetId=await findOrCreateSheet();
+
+    // Round History
+    gsSetStatus('Writing Round History...');
+    const histRows=[['Round','Date','Layout','Player','Raw','Diff','HC Used','Net','Net Payout','Raw Payout','Provisional']];
+    S.rounds.slice().sort((a,b)=>a.roundNum-b.roundNum).forEach(r=>{
+      const isP=isRoundProv(r.roundNum);
+      const{payouts}=calcRoundPayouts(r.players,r.roundNum);
+      r.players.forEach(p=>{
+        const pay=payouts[p.name]||{net:0,raw:0};
+        histRows.push([r.roundNum,r.date,r.layout,p.name,p.raw,parseFloat(p.diff.toFixed(1)),isP?'—':p.hcUsed,isP?'—':p.net,pay.net?parseFloat(pay.net.toFixed(2)):0,pay.raw?parseFloat(pay.raw.toFixed(2)):0,isP?'Yes':'No']);
+      });
+    });
+    await writeSheet(sheetId,'Round History',histRows);
+
+    // Handicaps
+    gsSetStatus('Writing Handicaps...');
+    const hcRows=[['Player','Rounds','Diff 1','Diff 2','Diff 3','Diff 4','Diff 5','Current HC','Status']];
+    Object.entries(S.players).forEach(([n,p])=>{
+      const d5=p.diffs.slice(-5);
+      hcRows.push([n,p.rounds.length,...d5,...Array(5-d5.length).fill(''),calcHC(p.diffs),p.rounds.length<PROV?'Provisional':'Net eligible']);
+    });
+    await writeSheet(sheetId,'Handicaps',hcRows);
+
+    // Finance
+    gsSetStatus('Writing Finance...');
+    const finRows=[['Round','Date','Layout','Players','Collected','Net Pool','Raw Pool','Ace Pot','Provisional']];
+    S.rounds.slice().sort((a,b)=>a.roundNum-b.roundNum).forEach(r=>{
+      const isP=isRoundProv(r.roundNum);
+      finRows.push([r.roundNum,r.date,r.layout,r.players.length,r.players.length*ENTRY,isP?0:r.players.length*NET_PP,isP?r.players.length*(NET_PP+RAW_PP):r.players.length*RAW_PP,r.players.length*ACE_PP,isP?'Yes':'No']);
+    });
+    await writeSheet(sheetId,'Finance',finRows);
+
+    // Roster
+    gsSetStatus('Writing Roster...');
+    const rostRows=[['Player','Rounds','Avg Raw','Best Raw','Current HC','Status']];
+    Object.entries(S.players).forEach(([n,p])=>{
+      const avg=p.rounds.length?(p.rounds.reduce((a,b)=>a+b,0)/p.rounds.length).toFixed(1):'-';
+      rostRows.push([n,p.rounds.length,avg,p.rounds.length?Math.min(...p.rounds):'-',calcHC(p.diffs),p.rounds.length<PROV?'Provisional':'Net eligible']);
+    });
+    await writeSheet(sheetId,'Roster',rostRows);
+
+    gsSetStatus('Synced! Open in Google Sheets →',true);
+    // Add link
+    const el=document.getElementById('gs-status');
+    el.innerHTML='✅ Synced! <a href="https://docs.google.com/spreadsheets/d/'+sheetId+'" target="_blank" style="color:#1A3A6B;font-weight:600">Open Google Sheet</a>';
+    el.style.display='block';el.style.background='#e8f5e9';el.style.color='#2e7d32';
+
+  }catch(e){
+    gsSetStatus('Error: '+e.message+' — try again',false,true);
+    console.error(e);
+  }
+  btn.disabled=false;
+  btn.innerHTML='<svg width="18" height="18" viewBox="0 0 24 24" fill="white"><path d="M19 3H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm-7 14H7v-2h5v2zm5-4H7v-2h10v2zm0-4H7V7h10v2z"/></svg> Sync to Google Sheets';
 }
 
 // ── INIT ──────────────────────────────────────────────────────
