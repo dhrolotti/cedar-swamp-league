@@ -17,7 +17,7 @@
   .screen{display:none;padding:15px;max-width:800px;margin:0 auto}
   .screen.active{display:block}
   .card{background:#fff;border-radius:10px;padding:15px;margin-bottom:15px;border:1px solid #eee}
-  .metrics{display:grid;grid-template-columns:2fr 1fr;gap:10px;margin-bottom:15px}
+  .metrics{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:15px}
   .metric{background:#fff;padding:15px;text-align:center;border-radius:8px;border:1px solid #eee}
   .m-n{font-size:22px;font-weight:700;color:#1A3A6B}
   .btn-prim{width:100%;padding:12px;background:#1A3A6B;color:#fff;border:none;border-radius:8px;font-weight:600;cursor:pointer}
@@ -82,40 +82,14 @@ let S={rounds:[],players:{},acePaidOut:0};
 
 async function load(){
   try {
-    const res=await fetch(`${SUPABASE_URL}/rest/v1/league_data?id=eq.season_2026`,{headers:{'apikey':SUPABASE_KEY,'Authorization':'Bearer '+SUPABASE_KEY}});
-    const d=await res.json();
-    if(d?.[0]?.data) S=d[0].data;
-    render(); setStatus('Synced');
-  } catch(e) { setStatus('Ready (Local)'); }
-}
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 4000); 
 
-async function save(){
-  setStatus('Saving...');
-  const res = await fetch(`${SUPABASE_URL}/rest/v1/league_data`, {
-    method:'POST',
-    headers:{'Content-Type':'application/json','apikey':SUPABASE_KEY,'Authorization':'Bearer '+SUPABASE_KEY,'Prefer':'resolution=merge-duplicates'},
-    body:JSON.stringify({id:'season_2026', data:S, updated_at:new Date()})
-  });
-  if(res.ok) setStatus('Synced'); else setStatus('Save Error');
-}
-
-function setStatus(m){ const el=document.getElementById('sync-status'); el.textContent=m; if(m==='Synced') el.classList.add('synced'); }
-
-function render(){
-  document.getElementById('m-r').textContent=S.rounds.length;
-  document.getElementById('m-a').textContent='$'+(S.rounds.reduce((a,r)=>a+r.players.length,0)-S.acePaidOut).toFixed(2);
-  document.getElementById('hist-table').querySelector('tbody').innerHTML=S.rounds.map(r=>`<tr><td>${r.date}</td><td>${r.players.length}</td><td>${r.avg}</td></tr>`).join('');
-  document.getElementById('rt-body').querySelector('tbody').innerHTML=Object.entries(S.players).map(([n,p])=>`<tr><td>${n}</td><td>${p.rounds.length}</td></tr>`).join('');
-}
-
-function handleFile(input){
-  const reader=new FileReader();
-  reader.onload=e=>{
-    const wb=XLSX.read(e.target.result,{type:'array'});
-    const rows=XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]]);
-    const players=rows.filter(r=>r.round_total_score>0).map(r=>({name:r.name,raw:r.round_total_score})).sort((a,b)=>a.raw-b.raw);
+    const res = await fetch(`${SUPABASE_URL}/rest/v1/league_data?id=eq.season_2026`, {
+      headers: {'apikey': SUPABASE_KEY, 'Authorization': 'Bearer ' + SUPABASE_KEY},
+      signal: controller.signal
+    });
     
-    document.getElementById('p-list').querySelector('tbody').innerHTML=players.map(p=>`<tr><td>${p.name}</td><td>${p.raw}</td><td>$6.00</td></tr>`).join('');
-    document.getElementById('prev').style.display='block';
-    
-    const pool = players.length * 5;
+    clearTimeout(timeoutId);
+    const d = await res.json();
+    if(d?.[0]?.data) S = d[0].data;
