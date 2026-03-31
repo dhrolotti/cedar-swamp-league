@@ -30,7 +30,7 @@
 
 <div class="header">
   <div><h1 style="font-size:18px">Cedar Swamp DGL</h1><p style="font-size:11px">2026 Season Opener</p></div>
-  <span id="sync-status" class="sync-status">Connecting...</span>
+  <span id="sync-status" class="sync-status">Ready</span>
 </div>
 
 <div class="nav">
@@ -80,16 +80,106 @@ const SUPABASE_URL='https://gwhffxlfhlssowrbcue.supabase.co';
 const SUPABASE_KEY='eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imd3aGZmeGxmaGxsc3Nvd3JiY3VlIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzQ5MTkyNDQsImV4cCI6MjA5MDQ5NTI0NH0.pQd-bcVnBClKoz6WCo5n5pHGLo6Q41zRbe27ekZCxbQ';
 let S={rounds:[],players:{},acePaidOut:0};
 
+// NEW LOGIC: Buttons work IMMEDIATELY. Sync happens in background.
+function setStatus(m){ 
+  const el = document.getElementById('sync-status'); 
+  el.textContent = m; 
+  el.className = (m === 'Synced') ? 'sync-status synced' : 'sync-status';
+}
+
+function render(){
+  document.getElementById('m-r').textContent = S.rounds.length;
+  document.getElementById('m-a').textContent = '$' + (S.rounds.reduce((a,r) => a + r.players.length, 0) - S.acePaidOut).toFixed(2);
+  document.getElementById('hist-table').querySelector('tbody').innerHTML = S.rounds.map(r => `<tr><td>${r.date}</td><td>${r.players.length}</td><td>${r.avg}</td></tr>`).join('');
+  document.getElementById('rt-body').querySelector('tbody').innerHTML = Object.entries(S.players).map(([n,p]) => `<tr><td>${n}</td><td>${p.rounds.length}</td></tr>`).join('');
+}
+
 async function load(){
   try {
-    const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 4000); 
-
     const res = await fetch(`${SUPABASE_URL}/rest/v1/league_data?id=eq.season_2026`, {
-      headers: {'apikey': SUPABASE_KEY, 'Authorization': 'Bearer ' + SUPABASE_KEY},
-      signal: controller.signal
+      headers: {'apikey': SUPABASE_KEY, 'Authorization': 'Bearer ' + SUPABASE_KEY}
     });
-    
-    clearTimeout(timeoutId);
     const d = await res.json();
-    if(d?.[0]?.data) S = d[0].data;
+    if(d?.[0]?.data) {
+      S = d[0].data;
+      render();
+      setStatus('Synced');
+    }
+  } catch(e) { console.log("Silent load failed."); }
+}
+
+async function save(){
+  setStatus('Saving...');
+  try {
+    const res = await fetch(`${SUPABASE_URL}/rest/v1/league_data`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'apikey': SUPABASE_KEY,
+        'Authorization': 'Bearer ' + SUPABASE_KEY,
+        'Prefer': 'resolution=merge-duplicates'
+      },
+      body: JSON.stringify({id: 'season_2026', data: S, updated_at: new Date()})
+    });
+    if(res.ok) setStatus('Synced'); else setStatus('Ready');
+  } catch(e) { setStatus('Ready'); }
+}
+
+function handleFile(input){
+  const reader = new FileReader();
+  reader.onload = e => {
+    const wb = XLSX.read(e.target.result, {type: 'array'});
+    const rows = XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]]);
+    const players = rows.filter(r => r.round_total_score > 0).map(r => ({name: r.name, raw: r.round_total_score})).sort((a,b) => a.raw - b.raw);
+    
+    document.getElementById('p-list').querySelector('tbody').innerHTML = players.map(p => `<tr><td>${p.name}</td><td>${p.raw}</td><td>$6.00</td></tr>`).join('');
+    document.getElementById('prev').style.display = 'block';
+    
+    const pool = players.length * 5; 
+    const ace = players.length * 1;
+    const p1 = (pool * 0.45).toFixed(2);
+    const p2 = (pool * 0.33).toFixed(2);
+    const p3 = (pool * 0.22).toFixed(2);
+    const totalOut = (parseFloat(p1) + parseFloat(p2) + parseFloat(p3)).toFixed(2);
+
+    document.getElementById('payout-results').innerHTML = `
+      <div style="background:#f0f7f0;padding:15px;border-radius:8px;border:1px solid #c3e6cb">
+        <p><b>Day 1 Ace Pot:</b> $${ace.toFixed(2)}</p>
+        <p><b>Total Pool Collected:</b> $${pool.toFixed(2)}</p><hr style="margin:10px 0;border:0;border-top:1px solid #c3e6cb">
+        <p><b>1st Place (45%):</b> $${p1}</p>
+        <p><b>2nd Place (33%):</b> $${p2}</p>
+        <p><b>3rd Place (22%):</b> $${p3}</p>
+        <p style="font-size:11px;color:#155724;margin-top:10px;font-weight:600">Total Paid Out: $${totalOut}</p>
+      </div>
+    `;
+    window.pi = {players, avg: (players.reduce((a,b) => a + b.raw, 0) / players.length).toFixed(1)};
+    show('pay', document.querySelector('button[onclick*="pay"]'));
+  };
+  reader.readAsArrayBuffer(input.files[0]);
+}
+
+function confirmImport(){
+  if(!window.pi) return;
+  S.rounds.push({date: new Date().toLocaleDateString(), players: window.pi.players, avg: window.pi.avg});
+  window.pi.players.forEach(pl => {
+    if(!S.players[pl.name]) S.players[pl.name] = {rounds: [], diffs: [], venmo: ''};
+    S.players[pl.name].rounds.push(pl.raw);
+  });
+  save(); render();
+  document.getElementById('prev').style.display = 'none';
+  alert('Round 1 Data Saved!');
+}
+
+function show(id, btn){
+  document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
+  document.querySelectorAll('.nav button').forEach(b => b.classList.remove('active'));
+  document.getElementById(id).classList.add('active');
+  if(btn) btn.classList.add('active');
+}
+
+// Start with buttons working, load data in back
+render();
+load();
+</script>
+</body>
+</html>
