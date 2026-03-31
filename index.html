@@ -17,7 +17,7 @@
   .screen{display:none;padding:15px;max-width:800px;margin:0 auto}
   .screen.active{display:block}
   .card{background:#fff;border-radius:10px;padding:15px;margin-bottom:15px;border:1px solid #eee}
-  .metrics{display:grid;grid-template-columns:repeat(2,1fr);gap:10px;margin-bottom:15px}
+  .metrics{display:grid;grid-template-columns:2fr 1fr;gap:10px;margin-bottom:15px}
   .metric{background:#fff;padding:15px;text-align:center;border-radius:8px;border:1px solid #eee}
   .m-n{font-size:22px;font-weight:700;color:#1A3A6B}
   .btn-prim{width:100%;padding:12px;background:#1A3A6B;color:#fff;border:none;border-radius:8px;font-weight:600;cursor:pointer}
@@ -29,21 +29,21 @@
 <body>
 
 <div class="header">
-  <div><h1>Cedar Swamp DGL</h1><p>2026 Season Opener</p></div>
+  <div><h1 style="font-size:18px">Cedar Swamp DGL</h1><p style="font-size:11px">2026 Season Opener</p></div>
   <span id="sync-status" class="sync-status">Connecting...</span>
 </div>
 
 <div class="nav">
   <button class="active" onclick="show('dash',this)">Dashboard</button>
-  <button onclick="show('imp',this)">Import</button>
   <button onclick="show('pay',this)">Payouts</button>
+  <button onclick="show('imp',this)">Import Round</button>
   <button onclick="show('ros',this)">Roster</button>
 </div>
 
 <div id="dash" class="screen active">
   <div class="metrics">
-    <div class="metric"><div class="m-n" id="m-r">0</div><div style="font-size:10px;color:#888">Rounds</div></div>
-    <div class="metric"><div class="m-n" id="m-a">$0</div><div style="font-size:10px;color:#888">Ace Pot</div></div>
+    <div class="metric"><div class="m-n" id="m-r">0</div><div style="font-size:10px;color:#888">Total Rounds</div></div>
+    <div class="metric"><div class="m-n" id="m-a">$0.00</div><div style="font-size:10px;color:#888">Ace Pot</div></div>
   </div>
   <div class="card">
     <div style="font-weight:600">Season History</div>
@@ -53,8 +53,8 @@
 
 <div id="pay" class="screen">
   <div class="card">
-    <h3 id="payout-h">Payout Calculator</h3>
-    <div id="payout-results" style="margin-top:15px">Upload a round to see splits.</div>
+    <h3>Day 1 Singles Payouts</h3>
+    <div id="payout-results" style="margin-top:15px;line-height:1.6">Upload the UDisc file to calculate exact payouts.</div>
   </div>
 </div>
 
@@ -66,13 +66,13 @@
     <input type="file" id="fin" style="display:none" onchange="handleFile(this)">
     <div id="prev" style="display:none;margin-top:15px">
       <table id="p-list"><thead><tr><th>Player</th><th>Score</th><th>Fee</th></tr></thead><tbody></tbody></table>
-      <button class="btn-prim" style="margin-top:15px" onclick="confirmImport()">Confirm & Save Round</button>
+      <button class="btn-prim" style="margin-top:15px" onclick="confirmImport()">Confirm & Save to Cloud</button>
     </div>
   </div>
 </div>
 
 <div id="ros" class="screen">
-  <div class="card"><table id="rt-body"><thead><tr><th>Player</th><th>Rounds</th></tr></thead><tbody></tbody></table></div>
+  <div class="card"><table id="rt-body"><thead><tr><th>Player</th><th>Total Rounds</th></tr></thead><tbody></tbody></table></div>
 </div>
 
 <script>
@@ -86,7 +86,7 @@ async function load(){
     const d=await res.json();
     if(d?.[0]?.data) S=d[0].data;
     render(); setStatus('Synced');
-  } catch(e) { setStatus('Ready'); }
+  } catch(e) { setStatus('Ready (Local)'); }
 }
 
 async function save(){
@@ -103,7 +103,7 @@ function setStatus(m){ const el=document.getElementById('sync-status'); el.textC
 
 function render(){
   document.getElementById('m-r').textContent=S.rounds.length;
-  document.getElementById('m-a').textContent='$'+(S.rounds.reduce((a,r)=>a+r.players.length,0)-S.acePaidOut);
+  document.getElementById('m-a').textContent='$'+(S.rounds.reduce((a,r)=>a+r.players.length,0)-S.acePaidOut).toFixed(2);
   document.getElementById('hist-table').querySelector('tbody').innerHTML=S.rounds.map(r=>`<tr><td>${r.date}</td><td>${r.players.length}</td><td>${r.avg}</td></tr>`).join('');
   document.getElementById('rt-body').querySelector('tbody').innerHTML=Object.entries(S.players).map(([n,p])=>`<tr><td>${n}</td><td>${p.rounds.length}</td></tr>`).join('');
 }
@@ -115,39 +115,7 @@ function handleFile(input){
     const rows=XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]]);
     const players=rows.filter(r=>r.round_total_score>0).map(r=>({name:r.name,raw:r.round_total_score})).sort((a,b)=>a.raw-b.raw);
     
-    document.getElementById('p-list').querySelector('tbody').innerHTML=players.map(p=>`<tr><td>${p.name}</td><td>${p.raw}</td><td>$6</td></tr>`).join('');
+    document.getElementById('p-list').querySelector('tbody').innerHTML=players.map(p=>`<tr><td>${p.name}</td><td>${p.raw}</td><td>$6.00</td></tr>`).join('');
     document.getElementById('prev').style.display='block';
     
-    const pool = players.length * 5; 
-    const ace = players.length * 1;
-    document.getElementById('payout-results').innerHTML = `
-      <div style="background:#f0f7f0;padding:15px;border-radius:8px">
-        <p><b>Day 1 Ace Pot:</b> $${ace}</p>
-        <p><b>Payout Pool (Singles):</b> $${pool}</p><hr style="margin:10px 0">
-        <p>1st Place: $${Math.round(pool*0.45)}</p>
-        <p>2nd Place: $${Math.round(pool*0.33)}</p>
-        <p>3rd Place: $${Math.round(pool*0.22)}</p>
-      </div>
-    `;
-    window.pi={players, avg:(players.reduce((a,b)=>a+b.raw,0)/players.length).toFixed(1)};
-  };
-  reader.readAsArrayBuffer(input.files[0]);
-}
-
-function confirmImport(){
-  S.rounds.push({date:new Date().toLocaleDateString(), players:window.pi.players, avg:window.pi.avg});
-  window.pi.players.forEach(pl=>{
-    if(!S.players[pl.name]) S.players[pl.name]={rounds:[],diffs:[],venmo:''};
-    S.players[pl.name].rounds.push(pl.raw);
-  });
-  save(); render();
-  document.getElementById('prev').style.display='none';
-  alert('Day 1 Rounds Saved Successfully!');
-}
-
-function show(id,btn){document.querySelectorAll('.screen').forEach(s=>s.classList.remove('active'));document.querySelectorAll('.nav button').forEach(b=>b.classList.remove('active'));document.getElementById(id).classList.add('active');btn.classList.add('active');}
-
-load();
-</script>
-</body>
-</html>
+    const pool = players.length * 5;
