@@ -8,148 +8,120 @@
 <style>
   *{box-sizing:border-box;margin:0;padding:0}
   body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Arial,sans-serif;background:#f5f5f5;font-size:14px}
-  .header{background:#1A3A6B;color:#fff;padding:15px;display:flex;justify-content:space-between;align-items:center;position:sticky;top:0;z-index:100}
+  .header{background:#1A3A6B;color:#fff;padding:15px;display:flex;justify-content:space-between;align-items:center;}
   .sync-status{font-size:11px;padding:4px 10px;border-radius:20px;background:rgba(255,255,255,0.1)}
-  .sync-status.synced{background:rgba(100,255,100,0.3)}
-  .nav{display:flex;background:#fff;border-bottom:1px solid #ddd;overflow-x:auto;position:sticky;top:58px;z-index:99}
+  .sync-status.synced{background:#2e7d32;color:#fff}
+  .nav{display:flex;background:#fff;border-bottom:1px solid #ddd;overflow-x:auto;}
   .nav button{padding:12px 15px;border:none;background:none;color:#666;cursor:pointer;font-size:12px}
   .nav button.active{color:#1A3A6B;border-bottom:2px solid #1A3A6B;font-weight:600}
   .screen{display:none;padding:15px;max-width:800px;margin:0 auto}
   .screen.active{display:block}
   .card{background:#fff;border-radius:10px;padding:15px;margin-bottom:15px;border:1px solid #eee}
-  .metrics{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:15px}
-  .metric{background:#fff;padding:10px;text-align:center;border-radius:8px;border:1px solid #eee}
-  .m-n{font-size:18px;font-weight:700;color:#1A3A6B}
-  .m-l{font-size:10px;color:#888}
-  table{width:100%;border-collapse:collapse;font-size:12px}
-  th{text-align:left;padding:8px;color:#666;background:#f9f9f9}
-  td{padding:8px;border-bottom:1px solid #f0f0f0}
   .btn-prim{width:100%;padding:12px;background:#1A3A6B;color:#fff;border:none;border-radius:8px;font-weight:600;cursor:pointer}
-  .lock-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,0.7);z-index:1000;align-items:center;justify-content:center}
-  .lock-overlay.show{display:flex}
-  .lock-box{background:#fff;padding:25px;border-radius:15px;text-align:center;width:300px}
-  .lock-box input{width:100%;padding:10px;margin-bottom:10px;border:1px solid #ddd;border-radius:5px}
+  table{width:100%;border-collapse:collapse;font-size:12px;margin-top:10px}
+  th{text-align:left;padding:8px;background:#f9f9f9}
+  td{padding:8px;border-bottom:1px solid #f0f0f0}
 </style>
 </head>
 <body>
 
-<div class="lock-overlay" id="lock-overlay">
-  <div class="lock-box">
-    <h3>Unlock League Tools</h3>
-    <input type="password" id="pw-input" placeholder="Password">
-    <button class="btn-prim" onclick="checkPw()">Unlock</button>
-  </div>
-</div>
-
 <div class="header">
-  <div><h1 style="font-size:16px">Cedar Swamp DGL</h1><p style="font-size:11px;opacity:0.8">2026 Season</p></div>
-  <span id="sync-status" class="sync-status">Connecting...</span>
+  <div><h1>Cedar Swamp DGL</h1><p id="sub">Day 1 Singles</p></div>
+  <span id="sync-status" class="sync-status">Ready</span>
 </div>
 
 <div class="nav">
-  <button class="active" onclick="show('dash',this)">Dashboard</button>
+  <button class="active" onclick="show('pay',this)">Payouts</button>
   <button onclick="show('imp',this)">Import Round</button>
-  <button onclick="show('ros',this)">Roster/Venmo</button>
+  <button onclick="show('ros',this)">Roster</button>
 </div>
 
-<div id="dash" class="screen active">
-  <div class="metrics">
-    <div class="metric"><div class="m-n" id="m-r">0</div><div class="m-l">Rounds</div></div>
-    <div class="metric"><div class="m-n" id="m-p">0</div><div class="m-l">Players</div></div>
-    <div class="metric"><div class="m-n" id="m-a">$0</div><div class="m-l">Ace Pot</div></div>
-    <div class="metric"><div class="m-n" id="m-i">$0</div><div class="m-l">Total</div></div>
-  </div>
+<div id="pay" class="screen active">
   <div class="card">
-    <div style="font-weight:600;margin-bottom:10px">Season Overview</div>
-    <table id="dash-table"><thead><tr><th>Date</th><th>Players</th><th>Avg</th></tr></thead><tbody id="dash-history"></tbody></table>
+    <h3 id="payout-h">Payout Calculator (15 Players)</h3>
+    <div id="payout-results" style="margin-top:15px">
+      <p>Upload UDisc file to see 1st, 2nd, and 3rd place payouts.</p>
+    </div>
   </div>
 </div>
 
 <div id="imp" class="screen">
   <div class="card">
-    <div style="border:2px dashed #ccc;padding:30px;text-align:center;border-radius:10px;cursor:pointer" onclick="requireAuth(()=>document.getElementById('fin').click())">
-      Upload UDisc Export File
+    <div style="border:2px dashed #ccc;padding:30px;text-align:center;border-radius:10px;" onclick="document.getElementById('fin').click()">
+      Tap to Upload UDisc Excel
     </div>
     <input type="file" id="fin" style="display:none" onchange="handleFile(this)">
     <div id="prev" style="display:none;margin-top:15px">
-      <table><thead><tr><th>Player</th><th>Raw</th><th>Fee</th></tr></thead><tbody id="pb"></tbody></table>
-      <button class="btn-prim" onclick="confirmImport()">Confirm & Save to Supabase</button>
+      <table id="p-list"><thead><tr><th>Player</th><th>Score</th><th>Fee</th></tr></thead><tbody></tbody></table>
+      <button class="btn-prim" style="margin-top:15px" onclick="confirmImport()">Confirm & Save Round</button>
     </div>
   </div>
 </div>
 
 <div id="ros" class="screen">
-  <div class="card">
-    <table><thead><tr><th>Player</th><th>Rds</th><th>Venmo</th></tr></thead><tbody id="rt-body"></tbody></table>
-    <div style="display:flex;gap:10px;margin-top:15px">
-      <input type="text" id="np-in" placeholder="New player name" style="flex:1;padding:8px;border-radius:5px;border:1px solid #ddd">
-      <button onclick="requireAuth(addPlayer)" style="padding:8px 15px;background:#1A3A6B;color:#fff;border:none;border-radius:5px">Add</button>
-    </div>
-  </div>
+  <div class="card"><table id="rt-body"></table></div>
 </div>
 
 <script>
-// ── CONFIG ────────────────────────────────────────────────────
 const SUPABASE_URL='https://gwhffxlfhlssowrbcue.supabase.co';
 const SUPABASE_KEY='eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imd3aGZmeGxmaGxsc3Nvd3JiY3VlIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzQ5MTkyNDQsImV4cCI6MjA5MDQ5NTI0NH0.pQd-bcVnBClKoz6WCo5n5pHGLo6Q41zRbe27ekZCxbQ';
-const LEAGUE_PASSWORD='cedar2026';
 let S={rounds:[],players:{},acePaidOut:0};
-let authed=false;
 
 async function load(){
   try {
-    const res=await fetch(`${SUPABASE_URL}/rest/v1/league_data?id=eq.season_2026`,{headers:{'apikey':SUPABASE_KEY,'Authorization':'Bearer '+SUPABASE_KEY}});
+    const res=await fetch(`${SUPABASE_URL}/rest/v1/league_data?select=data`,{headers:{'apikey':SUPABASE_KEY,'Authorization':'Bearer '+SUPABASE_KEY}});
     const d=await res.json();
     if(d?.[0]?.data) S=d[0].data;
-    render(); document.getElementById('sync-status').textContent='Synced'; document.getElementById('sync-status').classList.add('synced');
-  } catch(e) { document.getElementById('sync-status').textContent='Offline'; }
+    setStatus('Synced');
+  } catch(e) { setStatus('Local Mode'); }
 }
 
 async function save(){
-  document.getElementById('sync-status').textContent='Saving...';
-  await fetch(`${SUPABASE_URL}/rest/v1/league_data?id=eq.season_2026`,{
-    method:'PATCH',headers:{'Content-Type':'application/json','apikey':SUPABASE_KEY,'Authorization':'Bearer '+SUPABASE_KEY},
-    body:JSON.stringify({data:S,updated_at:new Date()})
+  setStatus('Saving...');
+  const res = await fetch(`${SUPABASE_URL}/rest/v1/league_data`, {
+    method:'POST',
+    headers:{'Content-Type':'application/json','apikey':SUPABASE_KEY,'Authorization':'Bearer '+SUPABASE_KEY,'Prefer':'resolution=merge-duplicates'},
+    body:JSON.stringify({id:'season_2026', data:S, updated_at:new Date()})
   });
-  document.getElementById('sync-status').textContent='Synced';
+  if(res.ok) setStatus('Synced'); else setStatus('Save Error');
 }
 
-function render(){
-  document.getElementById('m-r').textContent=S.rounds.length;
-  document.getElementById('m-p').textContent=Object.keys(S.players).length;
-  document.getElementById('m-a').textContent='$'+(S.rounds.reduce((a,r)=>a+r.players.length,0)-S.acePaidOut);
-  document.getElementById('rt-body').innerHTML=Object.entries(S.players).map(([n,p])=>`<tr><td>${n}</td><td>${p.rounds.length}</td><td>${p.venmo||''}</td></tr>`).join('');
-  document.getElementById('dash-history').innerHTML=S.rounds.map(r=>`<tr><td>${r.date}</td><td>${r.players.length}</td><td>${r.fieldAvg || '-'}</td></tr>`).join('');
-}
+function setStatus(m){ const el=document.getElementById('sync-status'); el.textContent=m; if(m==='Synced') el.classList.add('synced'); }
 
 function handleFile(input){
   const reader=new FileReader();
   reader.onload=e=>{
     const wb=XLSX.read(e.target.result,{type:'array'});
     const rows=XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]]);
-    const players=rows.filter(r=>r.round_total_score>0).map(r=>({name:r.name,raw:r.round_total_score}));
-    document.getElementById('pb').innerHTML=players.map(p=>`<tr><td>${p.name}</td><td>${p.raw}</td><td>$${(S.players[p.name]?.rounds.length>=3)?10:6}</td></tr>`).join('');
+    const players=rows.filter(r=>r.round_total_score>0).map(r=>({name:r.name,raw:r.round_total_score})).sort((a,b)=>a.raw-b.raw);
+    
+    document.getElementById('p-list').querySelector('tbody').innerHTML=players.map(p=>`<tr><td>${p.name}</td><td>${p.raw}</td><td>$6</td></tr>`).join('');
     document.getElementById('prev').style.display='block';
+    
+    // Payout Calc
+    const pool = players.length * 5; // $5 per player to raw pool
+    const ace = players.length * 1;
+    document.getElementById('payout-results').innerHTML = `
+      <div style="background:#f0f7f0;padding:15px;border-radius:8px">
+        <p><b>Ace Pot:</b> $${ace}</p>
+        <p><b>Total Payout Pool:</b> $${pool}</p><hr style="margin:10px 0">
+        <p>1st Place: $${Math.round(pool*0.45)}</p>
+        <p>2nd Place: $${Math.round(pool*0.33)}</p>
+        <p>3rd Place: $${Math.round(pool*0.22)}</p>
+      </div>
+    `;
     window.pi={players};
   };
   reader.readAsArrayBuffer(input.files[0]);
 }
 
 function confirmImport(){
-  const p=window.pi; 
-  const avg = p.players.reduce((a,b)=>a+b.raw,0)/p.players.length;
-  S.rounds.push({date:new Date().toISOString().slice(0,10),players:p.players, fieldAvg: avg.toFixed(1)});
-  p.players.forEach(pl=>{ 
-    if(!S.players[pl.name])S.players[pl.name]={rounds:[],diffs:[],venmo:''}; 
-    S.players[pl.name].rounds.push(pl.raw); 
-  });
-  save(); render(); document.getElementById('prev').style.display='none';
+  S.rounds.push({date:new Date().toLocaleDateString(), players:window.pi.players});
+  save();
+  alert('Round Saved!');
 }
 
 function show(id,btn){document.querySelectorAll('.screen').forEach(s=>s.classList.remove('active'));document.querySelectorAll('.nav button').forEach(b=>b.classList.remove('active'));document.getElementById(id).classList.add('active');btn.classList.add('active');}
-function showPasswordModal(){document.getElementById('lock-overlay').classList.add('show');}
-function checkPw(){if(document.getElementById('pw-input').value===LEAGUE_PASSWORD){authed=true;document.getElementById('lock-overlay').classList.remove('show');}}
-function requireAuth(a){if(authed)a();else showPasswordModal();}
 
 load();
 </script>
