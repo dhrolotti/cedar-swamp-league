@@ -23,7 +23,6 @@
         .status{font-size:10px;padding:3px 8px;border-radius:10px;background:rgba(255,255,255,0.2)}
         .tag{font-size:9px;font-weight:bold;padding:2px 5px;border-radius:4px;text-transform:uppercase}
         .tag-prob{background:#ffecb3;color:#ff6f00}
-        .tag-mbr{background:#e1f5fe;color:#01579b}
         .payout-row{display:flex;justify-content:space-between;padding:8px 0;border-bottom:1px solid #eee}
         .payout-amt{font-weight:bold;color:#2e7d32}
     </style>
@@ -104,7 +103,9 @@ function processFile(input) {
             const h = S.players[p.name]?.rounds || [];
             const isM = h.length >= 3;
             const avg = h.length ? h.reduce((a,b)=>a+b,0)/h.length : p.round_total_score;
-            const hcp = isM ? Math.max(0, Math.floor((avg - 54) * 0.8)) : 0; 
+            // HANDICAP LOGIC: Locked at 15 Max
+            let hcp = isM ? Math.floor((avg - 54) * 0.8) : 0;
+            hcp = Math.max(0, Math.min(hcp, 15)); 
             return { name: p.name, raw: p.round_total_score, hcp: hcp, net: p.round_total_score - hcp, isM: isM };
         });
 
@@ -118,9 +119,7 @@ function processFile(input) {
 }
 
 function calcPayouts() {
-    // Math Logic: Probation $5 Raw, Member $4 Raw + $5 Net
-    let rawP = 0;
-    let netP = 0;
+    let rawP = 0, netP = 0;
     window.currentRoundData.forEach(p => {
         netP += 5; 
         rawP += p.isM ? 4 : 5;
@@ -129,19 +128,19 @@ function calcPayouts() {
     const rawAll = [...window.currentRoundData].sort((a,b)=>a.raw-b.raw);
     const netMembers = [...window.currentRoundData].filter(p => p.isM).sort((a,b)=>a.net-b.net);
 
-    let rSpots = window.currentRoundData.length > 15 ? 3 : 2;
+    let rSpots = window.currentRoundData.length > 15 ? 3 : window.currentRoundData.length >= 10 ? 3 : 2; 
     let rSplits = rSpots === 3 ? [0.5, 0.3, 0.2] : [0.6, 0.4];
     
     let nSpots = netMembers.length > 15 ? 4 : netMembers.length > 8 ? 3 : 2;
     let nSplits = nSpots === 4 ? [0.4, 0.3, 0.2, 0.1] : nSpots === 3 ? [0.5, 0.3, 0.2] : [0.6, 0.4];
 
-    // VALUE-CHECK LOGIC (The "Highest Value Wins" Sorting)
     let finalPayouts = [];
     let usedNames = new Set();
     let availablePrizes = [];
 
-    for(let i=0; i<rSpots; i++) availablePrizes.push({ type: 'Raw', val: rawP * rSplits[i], place: i+1, players: rawAll });
-    for(let i=0; i<nSpots; i++) availablePrizes.push({ type: 'Net', val: netP * nSplits[i], place: i+1, players: netMembers });
+    // Map exact prizes - No Rounding Up
+    for(let i=0; i<rSpots; i++) availablePrizes.push({ type: 'Raw', val: Number((rawP * rSplits[i]).toFixed(2)), place: i+1, players: rawAll });
+    for(let i=0; i<nSpots; i++) availablePrizes.push({ type: 'Net', val: Number((netP * nSplits[i]).toFixed(2)), place: i+1, players: netMembers });
 
     availablePrizes.sort((a,b) => b.val - a.val);
 
@@ -155,11 +154,11 @@ function calcPayouts() {
         }
     });
 
-    let html = `<h3>Payouts (Highest Value Priority)</h3><hr style="margin:10px 0">`;
+    let html = `<h3>Payouts (50/30/20 Tiered)</h3><hr style="margin:10px 0">`;
     finalPayouts.sort((a,b) => b.amt - a.amt).forEach(p => {
         html += `<div class="payout-row"><span>${p.place}${p.place==1?'st':p.place==2?'nd':p.place==3?'rd':'th'} ${p.type} - ${p.name}</span><span class="payout-amt">$${p.amt.toFixed(2)}</span></div>`;
     });
-    html += `<div style="margin-top:15px; font-size:10px; color:#666">Pool Totals: Raw $${rawP} | Net $${netP}</div>`;
+    html += `<div style="margin-top:15px; font-size:10px; color:#666">Field: ${window.currentRoundData.length} | Raw: $${rawP.toFixed(2)} | Net: $${netP.toFixed(2)}</div>`;
     
     document.getElementById('p-out').innerHTML = html;
 }
@@ -183,16 +182,17 @@ async function saveData() {
 
 function updateUI() {
     const totalEntries = Object.values(S.players).reduce((a,b)=>a+b.rounds.length, 0);
-    document.getElementById('stats-view').innerHTML = `<b>Total Rounds Recorded:</b> ${S.rounds.length}<br><b>Current Ace Pot:</b> $${totalEntries}`;
-    
+    document.getElementById('stats-view').innerHTML = `<b>Total Rounds:</b> ${S.rounds.length}<br><b>Ace Pot:</b> $${totalEntries}`;
     document.getElementById('h-table').querySelector('tbody').innerHTML = S.rounds.slice().reverse().map(r => `
         <tr><td>${r.date}</td><td>${r.data.sort((a,b)=>a.raw-b.raw)[0].name}</td><td>${r.data.filter(p=>p.isM).sort((a,b)=>a.net-b.net)[0]?.name || '—'}</td></tr>
     `).join('');
-
     document.getElementById('rTable').querySelector('tbody').innerHTML = Object.entries(S.players).map(([n, d]) => {
         const avg = (d.rounds.reduce((a,b)=>a+b,0)/d.rounds.length).toFixed(1);
         const isM = d.rounds.length >= 3;
-        return `<tr><td>${n} ${!isM ? '<span class="tag tag-prob">PROB</span>' : ''}</td><td>${avg}</td><td>${isM ? Math.max(0, Math.floor((avg - 54) * 0.8)) : '—'}</td><td>${d.rounds.length}</td></tr>`;
+        // Roster displays capped handicap
+        let hcp = isM ? Math.floor((avg - 54) * 0.8) : 0;
+        hcp = Math.max(0, Math.min(hcp, 15));
+        return `<tr><td>${n} ${!isM ? '<span class="tag tag-prob">PROB</span>' : ''}</td><td>${avg}</td><td>${isM ? hcp : '—'}</td><td>${d.rounds.length}</td></tr>`;
     }).join('');
 }
 
@@ -200,8 +200,9 @@ function exportCSV() {
     let csv = "Player,Average,Handicap,Rounds\n";
     Object.entries(S.players).forEach(([n, d]) => {
         const avg = (d.rounds.reduce((a,b)=>a+b,0)/d.rounds.length).toFixed(1);
-        const h = d.rounds.length >= 3 ? Math.max(0, Math.floor((avg - 54) * 0.8)) : 0;
-        csv += `${n},${avg},${h},${d.rounds.length}\n`;
+        let hcp = d.rounds.length >= 3 ? Math.floor((avg - 54) * 0.8) : 0;
+        hcp = Math.max(0, Math.min(hcp, 15));
+        csv += `${n},${avg},${hcp},${d.rounds.length}\n`;
     });
     const blob = new Blob([csv], { type: 'text/csv' });
     const a = document.createElement('a');
