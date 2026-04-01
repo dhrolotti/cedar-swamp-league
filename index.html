@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Cedar Swamp DGL - SECURE</title>
+    <title>Cedar Swamp DGL - RESET</title>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
     <style>
         *{box-sizing:border-box;margin:0;padding:0}
@@ -43,7 +43,7 @@
 <div id="dash" class="screen active">
     <div class="card">
         <h3>Season Summary</h3>
-        <div id="stats-view" style="margin-top:10px">Loading...</div>
+        <div id="stats-view" style="margin-top:10px">0 Rounds Recorded</div>
     </div>
     <div class="card">
         <h3>Round History</h3>
@@ -58,4 +58,136 @@
         <button class="btn btn-blue" onclick="document.getElementById('fIn').click()">UPLOAD UDISC EXCEL</button>
         <div id="preview" style="display:none;margin-top:20px">
             <h3 id="round-avg-label"></h3>
-            <table id="lTable">
+            <table id="lTable"><thead><tr><th>Player</th><th>Raw</th><th>Hcp</th><th>Net</th><th>Status</th></tr></thead><tbody></tbody></table>
+            <button class="btn btn-blue" onclick="saveData()">CONFIRM & SAVE ROUND</button>
+        </div>
+    </div>
+</div>
+
+<div id="pay" class="screen">
+    <div class="card" id="p-out">Upload a round to see payouts.</div>
+</div>
+
+<div id="ros" class="screen">
+    <div class="card">
+        <h3>League Roster</h3>
+        <table id="rTable"><thead><tr><th>Player</th><th>Avg Diff</th><th>Hcp</th><th>Rounds</th></tr></thead><tbody></tbody></table>
+    </div>
+</div>
+
+<script>
+const URL='https://gwhffxlfhllssowrbcue.supabase.co';
+const KEY='eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imd3aGZmeGxmaGxsc3Nvd3JiY3VlIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzQ5MTkyNDQsImV4cCI6MjA5MDQ5NTI0NH0.pQd-bcVnBClKoz6WCo5n5pHGLo6Q41zRbe27ekZCxbQ';
+const PIN='0123';
+let S = { rounds: [], players: {} };
+
+async function loadData() {
+    try {
+        const res = await fetch(`${URL}/rest/v1/league_data?id=eq.season_2026`, { headers: {'apikey': KEY, 'Authorization': 'Bearer ' + KEY} });
+        const data = await res.json();
+        if (data && data.length > 0) { 
+            S = data[0].data || { rounds: [], players: {} }; 
+        } else {
+            S = { rounds: [], players: {} };
+        }
+        document.getElementById('sync-status').textContent = "Synced";
+        updateUI();
+    } catch(e) { document.getElementById('sync-status').textContent = "Sync Error"; }
+}
+
+function processFile(input) {
+    const reader = new FileReader();
+    reader.onload = e => {
+        const wb = XLSX.read(e.target.result, {type:'array'});
+        const rows = XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]]);
+        const active = rows.filter(r => r.round_total_score > 0);
+        const fAvg = active.reduce((a,b) => a + b.round_total_score, 0) / active.length;
+        window.currentFieldAvg = fAvg.toFixed(2);
+        document.getElementById('round-avg-label').textContent = `Field Average: ${window.currentFieldAvg}`;
+
+        window.currentRoundData = active.map(p => {
+            const history = S.players[p.name]?.diffs || [];
+            const isM = history.length >= 3;
+            const avgDiff = history.length ? history.reduce((a,b)=>a+b,0)/history.length : (p.round_total_score - fAvg);
+            let hcp = (isM && avgDiff > 0) ? Math.floor(avgDiff * 0.8) : 0;
+            hcp = Math.min(hcp, 15); 
+            return { name: p.name, raw: p.round_total_score, hcp: hcp, net: p.round_total_score - hcp, isM: isM, diff: p.round_total_score - fAvg };
+        });
+
+        document.getElementById('lTable').querySelector('tbody').innerHTML = window.currentRoundData.sort((a,b)=>a.net-b.net).map(p => `
+            <tr><td>${p.name}</td><td>${p.raw}</td><td>-${p.hcp}</td><td><b>${p.net}</b></td><td><span class="tag ${p.isM ? 'tag-mbr' : 'tag-prob'}">${p.isM ? 'MBR' : 'PROB'}</span></td></tr>`).join('');
+        
+        calcPayouts();
+        document.getElementById('preview').style.display = 'block';
+    };
+    reader.readAsArrayBuffer(input.files[0]);
+}
+
+function calcPayouts() {
+    let rawP = 0, netP = 0;
+    window.currentRoundData.forEach(p => { netP += 5; rawP += p.isM ? 4 : 5; });
+    const rawAll = [...window.currentRoundData].sort((a,b)=>a.raw-b.raw);
+    const netMembers = [...window.currentRoundData].filter(p => p.isM).sort((a,b)=>a.net-b.net);
+    let rSplits = [0.5, 0.3, 0.2], nSplits = netMembers.length > 8 ? [0.5, 0.3, 0.2] : [0.6, 0.4];
+    let finalPayouts = [], used = new Set(), prizes = [];
+
+    [0,1,2].forEach(i => { if(rawAll[i]) prizes.push({ type: 'Raw', val: (rawP * rSplits[i]).toFixed(2), name: rawAll[i].name }); });
+    netMembers.slice(0, nSplits.length).forEach((p, i) => prizes.push({ type: 'Net', val: (netP * nSplits[i]).toFixed(2), name: p.name }));
+
+    prizes.sort((a,b) => b.val - a.val).forEach(prize => {
+        if(!used.has(prize.name)) { finalPayouts.push(prize); used.add(prize.name); }
+    });
+
+    document.getElementById('p-out').innerHTML = `<h3>Payouts</h3><hr>` + finalPayouts.map(p => `
+        <div style="display:flex;justify-content:space-between;padding:8px 0"><span>${p.type} - ${p.name}</span><b>$${p.val}</b></div>`).join('');
+}
+
+async function saveData() {
+    if (prompt("PIN:") !== PIN) return;
+    S.rounds.push({ date: new Date().toLocaleDateString(), avg: window.currentFieldAvg, data: window.currentRoundData });
+    window.currentRoundData.forEach(p => {
+        if(!S.players[p.name]) S.players[p.name] = { diffs: [] };
+        S.players[p.name].diffs.push(p.diff);
+    });
+    save();
+}
+
+async function deleteLastRound() {
+    if (prompt("PIN:") !== PIN) return;
+    const last = S.rounds.pop();
+    if(last) last.data.forEach(p => { if(S.players[p.name]) S.players[p.name].diffs.pop(); });
+    save();
+}
+
+async function save() {
+    await fetch(`${URL}/rest/v1/league_data`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'apikey': KEY, 'Authorization': 'Bearer ' + KEY, 'Prefer': 'resolution=merge-duplicates' },
+        body: JSON.stringify({ id: 'season_2026', data: S, updated_at: new Date() })
+    });
+    location.reload();
+}
+
+function updateUI() {
+    document.getElementById('stats-view').innerHTML = `<b>Rounds:</b> ${S.rounds.length}<br><b>Ace Pot:</b> $${Object.values(S.players).reduce((a,b)=>a+b.diffs.length,0)}`;
+    document.getElementById('h-table').querySelector('tbody').innerHTML = S.rounds.slice().reverse().map(r => `
+        <tr><td>${r.date}</td><td>${r.avg}</td><td>${r.data.sort((a,b)=>a.raw-b.raw)[0].name}</td></tr>`).join('');
+    if(S.rounds.length > 0) document.getElementById('delete-container').innerHTML = `<button class="btn btn-red" onclick="deleteLastRound()">DELETE LAST ROUND</button>`;
+    document.getElementById('rTable').querySelector('tbody').innerHTML = Object.entries(S.players).map(([n, d]) => {
+        const avgD = (d.diffs.reduce((a,b)=>a+b,0)/d.diffs.length).toFixed(1);
+        const isM = d.diffs.length >= 3;
+        let h = (isM && avgD > 0) ? Math.min(15, Math.floor(avgD * 0.8)) : 0;
+        return `<tr><td>${n}</td><td>${avgD > 0 ? '+'+avgD : avgD}</td><td>${isM ? h : '—'}</td><td>${d.diffs.length}</td></tr>`;
+    }).join('');
+}
+
+function show(id, btn) {
+    document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
+    document.querySelectorAll('.nav button').forEach(b => b.classList.remove('active'));
+    document.getElementById(id).classList.add('active');
+    btn.classList.add('active');
+}
+loadData();
+</script>
+</body>
+</html>
