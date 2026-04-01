@@ -27,7 +27,8 @@
         .tag{font-size:9px;font-weight:bold;padding:2px 5px;border-radius:4px;text-transform:uppercase}
         .tag-mbr{background:#e3f2fd;color:#1565c0}
         .tag-prob{background:#fff3e0;color:#ef6c00}
-        .win-label{font-size:10px;color:#666;display:block}
+        .win-label{font-size:9px;color:#888;display:block;text-transform:uppercase;font-weight:bold}
+        .layout-tag{font-size:10px;color:#1A3A6B;background:#e8effa;padding:6px;border-radius:4px;margin-bottom:10px;display:block;font-weight:bold;border:1px solid #c5d5f0}
     </style>
 </head>
 <body>
@@ -53,7 +54,7 @@
     <div class="card">
         <h3>Round History</h3>
         <table id="h-table">
-            <thead><tr><th>Date</th><th>Raw Winner</th><th>Net Winner</th></tr></thead>
+            <thead><tr><th>Date / Layout</th><th>Raw Winner</th><th>Net Winner</th></tr></thead>
             <tbody></tbody>
         </table>
     </div>
@@ -65,6 +66,7 @@
         <input type="file" id="fIn" style="display:none" onchange="processFile(this)">
         <button class="btn btn-blue" onclick="document.getElementById('fIn').click()">UPLOAD UDISC EXCEL</button>
         <div id="preview" style="display:none;margin-top:20px">
+            <div id="import-meta" class="layout-tag"></div>
             <h3 id="round-avg-label"></h3>
             <table id="lTable"><thead><tr><th>Player</th><th>Raw</th><th>Hcp</th><th>Net</th><th>Status</th></tr></thead><tbody></tbody></table>
             <button class="btn btn-blue" onclick="saveData()">CONFIRM & SAVE ROUND</button>
@@ -76,6 +78,7 @@
     <div class="card">
         <h3>Round Results</h3>
         <select id="lead-selector" onchange="renderLeaderboard()"></select>
+        <div id="lead-meta"></div>
         <table id="lead-table"><thead><tr><th>Pos</th><th>Player</th><th>Raw</th><th>Hcp</th><th>Net</th></tr></thead><tbody></tbody></table>
     </div>
 </div>
@@ -125,7 +128,7 @@ function getHcpData(diffs) {
     let working = [...diffs];
     if (working.length >= 5) {
         working.sort((a, b) => b - a);
-        working.shift(); // Drop the worst (highest diff)
+        working.shift(); 
     }
     const avg = working.reduce((a, b) => a + b, 0) / working.length;
     const isM = diffs.length >= 3;
@@ -138,6 +141,10 @@ function processFile(input) {
     reader.onload = e => {
         const wb = XLSX.read(e.target.result, {type:'array'});
         const rows = XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]]);
+        
+        window.currentLayout = rows[0]?.layout_name || "Standard";
+        window.currentPar = rows[0]?.course_par || "??";
+
         const active = rows.filter(r => r.round_total_score > 0);
         const fAvg = active.reduce((a,b) => a + b.round_total_score, 0) / active.length;
         window.currentFieldAvg = fAvg.toFixed(2);
@@ -150,6 +157,7 @@ function processFile(input) {
         document.getElementById('lTable').querySelector('tbody').innerHTML = window.currentRoundData.sort((a,b)=>a.net-b.net).map(p => `
             <tr><td>${p.name}</td><td>${p.raw}</td><td>-${p.hcp}</td><td><b>${p.net}</b></td><td><span class="tag ${p.isM?'tag-mbr':'tag-prob'}">${p.isM?'MBR':'PROB'}</span></td></tr>`).join('');
         
+        document.getElementById('import-meta').textContent = `Layout: ${window.currentLayout} (Par ${window.currentPar})`;
         document.getElementById('round-avg-label').textContent = `Field Average: ${window.currentFieldAvg}`;
         document.getElementById('preview').style.display = 'block';
         renderPayouts(window.currentRoundData, "LIVE PREVIEW");
@@ -159,8 +167,17 @@ function processFile(input) {
 
 function renderLeaderboard() {
     const idx = document.getElementById('lead-selector').value;
-    if (idx === "") return;
+    if (idx === "") {
+        document.getElementById('lead-meta').innerHTML = "";
+        document.getElementById('lead-table').querySelector('tbody').innerHTML = "";
+        return;
+    }
     const round = S.rounds[idx];
+    document.getElementById('lead-meta').innerHTML = `
+        <div class="layout-tag">
+            Layout: ${round.layout || 'Unknown'} (Par ${round.par || '?'})<br>
+            Field Average: ${round.avg}
+        </div>`;
     const sorted = [...round.data].sort((a,b) => a.net - b.net);
     document.getElementById('lead-table').querySelector('tbody').innerHTML = sorted.map((p, i) => `
         <tr><td>${i+1}</td><td>${p.name}</td><td>${p.raw}</td><td>-${p.hcp}</td><td><b>${p.net}</b></td></tr>`).join('');
@@ -195,7 +212,13 @@ function renderPayouts(roundData, label) {
 
 async function saveData() {
     if (prompt("Admin PIN:") !== PIN) return;
-    S.rounds.push({ date: new Date().toLocaleDateString(), avg: window.currentFieldAvg, data: window.currentRoundData });
+    S.rounds.push({ 
+        date: new Date().toLocaleDateString(), 
+        avg: window.currentFieldAvg, 
+        layout: window.currentLayout,
+        par: window.currentPar,
+        data: window.currentRoundData 
+    });
     window.currentRoundData.forEach(p => {
         if(!S.players[p.name]) S.players[p.name] = { diffs: [] };
         S.players[p.name].diffs.push(p.diff);
@@ -227,11 +250,11 @@ async function performSave() {
 }
 
 function exportAuditCSV() {
-    let csv = "AUDIT LOG - CEDAR SWAMP DGL\n\nROUND HISTORY\nDate,Field Avg,Raw Winner,Net Winner,Pot Total\n";
+    let csv = "AUDIT LOG - CEDAR SWAMP DGL\n\nROUND HISTORY\nDate,Layout,Par,Field Avg,Raw Winner,Net Winner,Pot Total\n";
     S.rounds.forEach(r => {
         const rw = [...r.data].sort((a,b)=>a.raw-b.raw)[0].name;
         const nw = [...r.data].filter(p=>p.isM).sort((a,b)=>a.net-b.net)[0]?.name || "N/A";
-        csv += `${r.date},${r.avg},${rw},${nw},${r.data.length * 10}\n`;
+        csv += `${r.date},${r.layout || 'N/A'},${r.par || '?'},${r.avg},${rw},${nw},${r.data.length * 10}\n`;
     });
     csv += "\nPLAYER ROSTER & HANDICAPS\nPlayer,Rounds,All Diffs,Average (Dropped Worst),Hcp\n";
     Object.entries(S.players).forEach(([n, d]) => {
@@ -250,7 +273,11 @@ function updateUI() {
     document.getElementById('h-table').querySelector('tbody').innerHTML = S.rounds.slice().reverse().map(r => {
         const rw = [...r.data].sort((a,b)=>a.raw-b.raw)[0];
         const nw = [...r.data].filter(p=>p.isM).sort((a,b)=>a.net-b.net)[0];
-        return `<tr><td>${r.date}</td><td><span class="win-label">Raw</span>${rw.name} (${rw.raw})</td><td><span class="win-label">Net</span>${nw ? nw.name+' ('+nw.net+')' : '—'}</td></tr>`;
+        return `<tr>
+            <td><b>${r.date}</b><br><span style="font-size:9px;color:#666">${r.layout || 'Standard'} (Par ${r.par || '?'})</span></td>
+            <td><span class="win-label">Raw</span>${rw.name} (${rw.raw})</td>
+            <td><span class="win-label">Net</span>${nw ? nw.name+' ('+nw.net+')' : '—'}</td>
+        </tr>`;
     }).join('');
     
     const opts = S.rounds.map((r, i) => `<option value="${i}">${r.date}</option>`).reverse().join('');
