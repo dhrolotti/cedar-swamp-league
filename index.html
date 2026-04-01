@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Cedar Swamp DGL - PRO</title>
+    <title>Cedar Swamp DGL - DYNAMIC</title>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
     <style>
         *{box-sizing:border-box;margin:0;padding:0}
@@ -20,12 +20,10 @@
         td{padding:8px;border-bottom:1px solid #eee}
         .btn{width:100%;padding:12px;border-radius:5px;border:none;font-weight:bold;cursor:pointer;margin-top:10px}
         .btn-blue{background:#1A3A6B;color:#fff}
-        .btn-red{background:#b71c1c;color:#fff;font-size:10px;padding:8px;width:auto;margin-top:20px}
+        .btn-red{background:#b71c1c;color:#fff;font-size:12px;padding:12px;width:100%;margin-top:20px;border-radius:5px}
         .status{font-size:10px;padding:3px 8px;border-radius:10px;background:rgba(255,255,255,0.2)}
         .tag{font-size:9px;font-weight:bold;padding:2px 5px;border-radius:4px;text-transform:uppercase}
         .tag-prob{background:#ffecb3;color:#ff6f00}
-        .payout-row{display:flex;justify-content:space-between;padding:8px 0;border-bottom:1px solid #eee}
-        .payout-amt{font-weight:bold;color:#2e7d32}
     </style>
 </head>
 <body>
@@ -44,14 +42,14 @@
 
 <div id="dash" class="screen active">
     <div class="card">
-        <h3>Season Summary</h3>
-        <div id="stats-view" style="margin-top:10px">Loading stats...</div>
+        <h3>Season Stats</h3>
+        <div id="stats-view" style="margin-top:10px">Loading...</div>
     </div>
     <div class="card">
         <h3>Round History</h3>
-        <table id="h-table"><thead><tr><th>Date</th><th>Raw Winner</th><th>Net Winner</th></tr></thead><tbody></tbody></table>
-        <div id="delete-zone"></div>
+        <table id="h-table"><thead><tr><th>Date</th><th>Field Avg</th><th>Winner</th></tr></thead><tbody></tbody></table>
     </div>
+    <div id="delete-container"></div>
 </div>
 
 <div id="imp" class="screen">
@@ -59,15 +57,15 @@
         <input type="file" id="fIn" style="display:none" onchange="processFile(this)">
         <button class="btn btn-blue" onclick="document.getElementById('fIn').click()">UPLOAD UDISC EXCEL</button>
         <div id="preview" style="display:none;margin-top:20px">
-            <h3>Round Preview</h3>
+            <h3 id="round-avg-label"></h3>
             <table id="lTable"><thead><tr><th>Player</th><th>Raw</th><th>Hcp</th><th>Net</th><th>Status</th></tr></thead><tbody></tbody></table>
-            <button class="btn btn-blue" onclick="saveData()">CONFIRM & SAVE TO CLOUD</button>
+            <button class="btn btn-blue" onclick="saveData()">CONFIRM & SAVE ROUND</button>
         </div>
     </div>
 </div>
 
 <div id="pay" class="screen">
-    <div class="card" id="p-out">Upload a round to see payouts.</div>
+    <div class="card" id="p-out">Upload a round to calculate payouts.</div>
 </div>
 
 <div id="ros" class="screen">
@@ -76,7 +74,7 @@
             <h3>League Roster</h3>
             <button class="btn" style="width:auto;font-size:10px;background:#eee;margin:0" onclick="exportCSV()">EXPORT CSV</button>
         </div>
-        <table id="rTable"><thead><tr><th>Player</th><th>Avg</th><th>Hcp</th><th>Rounds</th></tr></thead><tbody></tbody></table>
+        <table id="rTable"><thead><tr><th>Player</th><th>Avg vs Field</th><th>Hcp</th><th>Rounds</th></tr></thead><tbody></tbody></table>
     </div>
 </div>
 
@@ -101,13 +99,21 @@ function processFile(input) {
         const rows = XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]]);
         const active = rows.filter(r => r.round_total_score > 0);
         
+        // DYNAMIC FIELD AVERAGE CALCULATION
+        const fieldAvg = active.reduce((a,b) => a + b.round_total_score, 0) / active.length;
+        window.currentFieldAvg = fieldAvg.toFixed(2);
+        document.getElementById('round-avg-label').textContent = `Field Average: ${window.currentFieldAvg}`;
+
         window.currentRoundData = active.map(p => {
-            const h = S.players[p.name]?.rounds || [];
-            const isM = h.length >= 3;
-            const avg = h.length ? h.reduce((a,b)=>a+b,0)/h.length : p.round_total_score;
-            let hcp = isM ? Math.floor((avg - 54) * 0.8) : 0;
+            const history = S.players[p.name]?.diffs || [];
+            const isM = history.length >= 3;
+            const avgDiff = history.length ? history.reduce((a,b)=>a+b,0)/history.length : (p.round_total_score - fieldAvg);
+            
+            // Handicap is 80% of average strokes over field average, capped at 15
+            let hcp = isM ? Math.floor(avgDiff * 0.8) : 0;
             hcp = Math.max(0, Math.min(hcp, 15)); 
-            return { name: p.name, raw: p.round_total_score, hcp: hcp, net: p.round_total_score - hcp, isM: isM };
+            
+            return { name: p.name, raw: p.round_total_score, hcp: hcp, net: p.round_total_score - hcp, isM: isM, diff: p.round_total_score - fieldAvg };
         });
 
         document.getElementById('lTable').querySelector('tbody').innerHTML = window.currentRoundData.sort((a,b)=>a.net-b.net).map(p => `
@@ -120,120 +126,67 @@ function processFile(input) {
 }
 
 function calcPayouts() {
-    let rawP = 0, netP = 0;
-    window.currentRoundData.forEach(p => {
-        netP += 5; 
-        rawP += p.isM ? 4 : 5;
-    });
-
+    let rawP = 0;
+    window.currentRoundData.forEach(p => rawP += p.isM ? 4 : 5);
     const rawAll = [...window.currentRoundData].sort((a,b)=>a.raw-b.raw);
-    const netMembers = [...window.currentRoundData].filter(p => p.isM).sort((a,b)=>a.net-b.net);
-
-    let rSpots = window.currentRoundData.length >= 10 ? 3 : 2; 
-    let rSplits = rSpots === 3 ? [0.5, 0.3, 0.2] : [0.6, 0.4];
+    let rSplits = [0.5, 0.3, 0.2];
     
-    let nSpots = netMembers.length > 15 ? 4 : netMembers.length > 8 ? 3 : 2;
-    let nSplits = nSpots === 4 ? [0.4, 0.3, 0.2, 0.1] : nSpots === 3 ? [0.5, 0.3, 0.2] : [0.6, 0.4];
-
-    let finalPayouts = [];
-    let usedNames = new Set();
-    let availablePrizes = [];
-
-    for(let i=0; i<rSpots; i++) availablePrizes.push({ type: 'Raw', val: Number((rawP * rSplits[i]).toFixed(2)), place: i+1, players: rawAll });
-    for(let i=0; i<nSpots; i++) availablePrizes.push({ type: 'Net', val: Number((netP * nSplits[i]).toFixed(2)), place: i+1, players: netMembers });
-
-    availablePrizes.sort((a,b) => b.val - a.val);
-
-    availablePrizes.forEach(prize => {
-        for(let p of prize.players) {
-            if(!usedNames.has(p.name)) {
-                finalPayouts.push({ name: p.name, type: prize.type, amt: prize.val, place: prize.place });
-                usedNames.add(p.name);
-                break;
-            }
-        }
+    let html = `<h3>Payouts (14 Players - Exact)</h3><hr style="margin:10px 0">`;
+    [0,1,2].forEach(i => {
+        let amt = (rawP * rSplits[i]).toFixed(2);
+        html += `<div style="display:flex;justify-content:space-between;padding:8px 0;border-bottom:1px solid #eee">
+            <span>${i+1}${i==0?'st':i==1?'nd':'rd'} Raw - ${rawAll[i].name}</span><b>$${amt}</b></div>`;
     });
-
-    let html = `<h3>Payouts (50/30/20 Exact)</h3><hr style="margin:10px 0">`;
-    finalPayouts.sort((a,b) => b.amt - a.amt).forEach(p => {
-        html += `<div class="payout-row"><span>${p.place}${p.place==1?'st':p.place==2?'nd':p.place==3?'rd':'th'} ${p.type} - ${p.name}</span><span class="payout-amt">$${p.amt.toFixed(2)}</span></div>`;
-    });
-    html += `<div style="margin-top:15px; font-size:10px; color:#666">Field: ${window.currentRoundData.length} | Raw Pool: $${rawP.toFixed(2)}</div>`;
-    
     document.getElementById('p-out').innerHTML = html;
 }
 
 async function deleteLastRound() {
-    if (S.rounds.length === 0) return;
-    if (!confirm("Delete the last round and all associated scores? This cannot be undone.")) return;
-
-    const lastRound = S.rounds.pop();
-    lastRound.data.forEach(p => {
+    if (!confirm("Confirm: Delete the last round and fix the double-save?")) return;
+    const last = S.rounds.pop();
+    last.data.forEach(p => {
         if (S.players[p.name]) {
-            S.players[p.name].rounds.pop();
-            if (S.players[p.name].rounds.length === 0) delete S.players[p.name];
+            S.players[p.name].diffs.pop();
+            if (S.players[p.name].diffs.length === 0) delete S.players[p.name];
         }
     });
-
-    try {
-        const res = await fetch(`${URL}/rest/v1/league_data`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json', 'apikey': KEY, 'Authorization': 'Bearer ' + KEY, 'Prefer': 'resolution=merge-duplicates' },
-            body: JSON.stringify({ id: 'season_2026', data: S, updated_at: new Date() })
-        });
-        if (res.ok) { alert("Last Round Deleted Successfully."); updateUI(); }
-    } catch(e) { alert("Delete Failed."); }
+    saveToCloud();
 }
 
 async function saveData() {
-    if(!window.currentRoundData) return;
-    S.rounds.push({ date: new Date().toLocaleDateString(), data: window.currentRoundData });
+    S.rounds.push({ date: new Date().toLocaleDateString(), avg: window.currentFieldAvg, data: window.currentRoundData });
     window.currentRoundData.forEach(p => {
-        if(!S.players[p.name]) S.players[p.name] = { rounds: [] };
-        S.players[p.name].rounds.push(p.raw);
+        if(!S.players[p.name]) S.players[p.name] = { diffs: [] };
+        S.players[p.name].diffs.push(p.diff);
     });
+    saveToCloud();
+}
+
+async function saveToCloud() {
     try {
-        const res = await fetch(`${URL}/rest/v1/league_data`, {
+        await fetch(`${URL}/rest/v1/league_data`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json', 'apikey': KEY, 'Authorization': 'Bearer ' + KEY, 'Prefer': 'resolution=merge-duplicates' },
             body: JSON.stringify({ id: 'season_2026', data: S, updated_at: new Date() })
         });
-        if (res.ok) { alert("Round Saved!"); updateUI(); }
-    } catch(e) { alert("Save Failed."); }
+        alert("Sync Complete.");
+        updateUI();
+    } catch(e) { alert("Sync Failed."); }
 }
 
 function updateUI() {
-    const totalEntries = Object.values(S.players).reduce((a,b)=>a+b.rounds.length, 0);
-    document.getElementById('stats-view').innerHTML = `<b>Total Rounds Recorded:</b> ${S.rounds.length}<br><b>Current Ace Pot:</b> $${totalEntries}`;
-    
+    document.getElementById('stats-view').innerHTML = `<b>Rounds Played:</b> ${S.rounds.length}<br><b>Ace Pot:</b> $${Object.values(S.players).reduce((a,b)=>a+b.diffs.length,0)}`;
     document.getElementById('h-table').querySelector('tbody').innerHTML = S.rounds.slice().reverse().map(r => `
-        <tr><td>${r.date}</td><td>${r.data.sort((a,b)=>a.raw-b.raw)[0].name}</td><td>${r.data.filter(p=>p.isM).sort((a,b)=>a.net-b.net)[0]?.name || '—'}</td></tr>
-    `).join('');
-
-    document.getElementById('delete-zone').innerHTML = S.rounds.length > 0 ? `<button class="btn btn-red" onclick="deleteLastRound()">DELETE LAST SAVED ROUND</button>` : '';
+        <tr><td>${r.date}</td><td>${r.avg}</td><td>${r.data.sort((a,b)=>a.raw-b.raw)[0].name}</td></tr>`).join('');
+    
+    document.getElementById('delete-container').innerHTML = S.rounds.length > 0 ? `<button class="btn btn-red" onclick="deleteLastRound()">DELETE LAST ROUND</button>` : '';
 
     document.getElementById('rTable').querySelector('tbody').innerHTML = Object.entries(S.players).map(([n, d]) => {
-        const avg = (d.rounds.reduce((a,b)=>a+b,0)/d.rounds.length).toFixed(1);
-        const isM = d.rounds.length >= 3;
-        let hcp = isM ? Math.floor((avg - 54) * 0.8) : 0;
+        const avgD = (d.diffs.reduce((a,b)=>a+b,0)/d.diffs.length).toFixed(1);
+        const isM = d.diffs.length >= 3;
+        let hcp = isM ? Math.floor(avgD * 0.8) : 0;
         hcp = Math.max(0, Math.min(hcp, 15));
-        return `<tr><td>${n} ${!isM ? '<span class="tag tag-prob">PROB</span>' : ''}</td><td>${avg}</td><td>${isM ? hcp : '—'}</td><td>${d.rounds.length}</td></tr>`;
+        return `<tr><td>${n}</td><td>${avgD > 0 ? '+' + avgD : avgD}</td><td>${isM ? hcp : '—'}</td><td>${d.diffs.length}</td></tr>`;
     }).join('');
-}
-
-function exportCSV() {
-    let csv = "Player,Average,Handicap,Rounds\n";
-    Object.entries(S.players).forEach(([n, d]) => {
-        const avg = (d.rounds.reduce((a,b)=>a+b,0)/d.rounds.length).toFixed(1);
-        let hcp = d.rounds.length >= 3 ? Math.floor((avg - 54) * 0.8) : 0;
-        hcp = Math.max(0, Math.min(hcp, 15));
-        csv += `${n},${avg},${hcp},${d.rounds.length}\n`;
-    });
-    const blob = new Blob([csv], { type: 'text/csv' });
-    const a = document.createElement('a');
-    a.href = window.URL.createObjectURL(blob);
-    a.download = 'CedarSwamp_Roster.csv';
-    a.click();
 }
 
 function show(id, btn) {
