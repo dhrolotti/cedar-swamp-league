@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Cedar Swamp DGL - PRO AUDIT</title>
+    <title>Cedar Swamp DGL - PROGRESSIVE</title>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
     <style>
         *{box-sizing:border-box;margin:0;padding:0}
@@ -49,7 +49,7 @@
 <div id="dash" class="screen active">
     <div class="card">
         <h3>Season Summary</h3>
-        <div id="stats-view">Loading...</div>
+        <div id="stats-view">Loading stats...</div>
     </div>
     <div class="card">
         <h3>Round History</h3>
@@ -95,7 +95,7 @@
     <div class="card">
         <h3>League Roster (Sharks @ Top)</h3>
         <table id="rTable"><thead><tr><th>Player</th><th>Avg Diff*</th><th>Hcp</th><th>Rounds</th></tr></thead><tbody></tbody></table>
-        <p style="font-size:10px;color:#888;margin-top:10px">*Averages drop the worst round after 5 games.</p>
+        <p style="font-size:10px;color:#888;margin-top:10px">*Using Progressive Drop logic (Best X of Y rounds).</p>
         <button class="btn btn-green" onclick="exportAuditCSV()">DOWNLOAD AUDIT LOG (.CSV)</button>
     </div>
 </div>
@@ -124,16 +124,23 @@ async function loadData() {
 }
 
 function getHcpData(diffs) {
-    if (!diffs || diffs.length === 0) return { avg: 0, hcp: 0, isM: false };
-    let working = [...diffs];
-    if (working.length >= 5) {
-        working.sort((a, b) => b - a);
-        working.shift(); 
-    }
-    const avg = working.reduce((a, b) => a + b, 0) / working.length;
-    const isM = diffs.length >= 3;
+    if (!diffs || diffs.length === 0) return { avg: 0, hcp: 0, isM: false, usedCount: 0 };
+    let working = [...diffs].sort((a, b) => a - b); 
+    let total = diffs.length;
+    let keep = total;
+
+    if (total >= 5 && total <= 6) keep = 4;
+    else if (total >= 7 && total <= 8) keep = 5;
+    else if (total >= 9 && total <= 10) keep = 6;
+    else if (total >= 11 && total <= 12) keep = 7;
+    else if (total >= 13) keep = 8;
+
+    const usedRounds = working.slice(0, keep);
+    const avg = usedRounds.reduce((a, b) => a + b, 0) / usedRounds.length;
+    const isM = total >= 3;
     const hcp = (isM && avg > 0) ? Math.min(15, Math.floor(avg * 0.8)) : 0;
-    return { avg, hcp, isM };
+    
+    return { avg, hcp, isM, usedCount: keep };
 }
 
 function processFile(input) {
@@ -142,8 +149,8 @@ function processFile(input) {
         const wb = XLSX.read(e.target.result, {type:'array'});
         const rows = XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]]);
         
-        window.currentLayout = rows[0]?.layout_name || "Standard";
-        window.currentPar = rows[0]?.course_par || "??";
+        window.currentLayout = rows[0]?.layout_name || rows[0]?.Layout || "Standard";
+        window.currentPar = rows[0]?.course_par || rows[0]?.Par || "??";
 
         const active = rows.filter(r => r.round_total_score > 0);
         const fAvg = active.reduce((a,b) => a + b.round_total_score, 0) / active.length;
@@ -256,10 +263,10 @@ function exportAuditCSV() {
         const nw = [...r.data].filter(p=>p.isM).sort((a,b)=>a.net-b.net)[0]?.name || "N/A";
         csv += `${r.date},${r.layout || 'N/A'},${r.par || '?'},${r.avg},${rw},${nw},${r.data.length * 10}\n`;
     });
-    csv += "\nPLAYER ROSTER & HANDICAPS\nPlayer,Rounds,All Diffs,Average (Dropped Worst),Hcp\n";
+    csv += "\nPLAYER ROSTER & HANDICAPS\nPlayer,Rounds,All Diffs,Best X Kept,Average (Used),Hcp\n";
     Object.entries(S.players).forEach(([n, d]) => {
         const hData = getHcpData(d.diffs);
-        csv += `${n},${d.diffs.length},"${d.diffs.map(x=>x.toFixed(1)).join('|')}",${hData.avg.toFixed(1)},${hData.hcp}\n`;
+        csv += `${n},${d.diffs.length},"${d.diffs.map(x=>x.toFixed(1)).join('|')}",${hData.usedCount},${hData.avg.toFixed(1)},${hData.hcp}\n`;
     });
     const link = document.createElement("a");
     link.setAttribute("href", encodeURI("data:text/csv;charset=utf-8," + csv));
