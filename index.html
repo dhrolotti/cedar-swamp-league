@@ -3,11 +3,11 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Cedar Swamp DGL Pro</title>
+    <title>Cedar Swamp DGL - PRO</title>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
     <style>
         *{box-sizing:border-box;margin:0;padding:0}
-        body{font-family:sans-serif;background:#f4f4f4;color:#333;font-size:14px}
+        body{font-family:sans-serif;background:#f4f4f4;color:#333}
         .header{background:#1A3A6B;color:#fff;padding:15px;display:flex;justify-content:space-between;align-items:center}
         .nav{display:flex;background:#fff;border-bottom:1px solid #ddd;position:sticky;top:0;z-index:100}
         .nav button{flex:1;padding:15px;border:none;background:none;font-weight:bold;color:#666;font-size:11px}
@@ -15,19 +15,18 @@
         .screen{display:none;padding:15px}
         .screen.active{display:block}
         .card{background:#fff;border-radius:8px;padding:15px;margin-bottom:15px;box-shadow:0 1px 3px rgba(0,0,0,0.1)}
-        table{width:100%;border-collapse:collapse;margin-top:10px}
-        th{text-align:left;padding:10px;background:#f8f8f8;font-size:12px}
-        td{padding:10px;border-bottom:1px solid #eee}
-        .btn{width:100%;padding:12px;border-radius:5px;border:none;font-weight:bold;cursor:pointer}
-        .btn-blue{background:#1A3A6B;color:#fff;margin-top:10px}
-        .btn-export{background:#e2e8f0;color:#333;width:auto;padding:5px 10px;font-size:11px}
+        table{width:100%;border-collapse:collapse;margin-top:10px;font-size:12px}
+        th{text-align:left;padding:8px;background:#f8f8f8}
+        td{padding:8px;border-bottom:1px solid #eee}
+        .btn{width:100%;padding:12px;border-radius:5px;border:none;font-weight:bold;cursor:pointer;margin-top:10px}
+        .btn-blue{background:#1A3A6B;color:#fff}
         .status{font-size:10px;padding:3px 8px;border-radius:10px;background:rgba(255,255,255,0.2)}
     </style>
 </head>
 <body>
 
 <div class="header">
-    <div><h1>Cedar Swamp DGL</h1><p style="font-size:10px">Advanced Tracker</p></div>
+    <div><h1>Cedar Swamp DGL</h1></div>
     <span id="sync-status" class="status">Connecting...</span>
 </div>
 
@@ -41,41 +40,34 @@
 <div id="dash" class="screen active">
     <div class="card">
         <h3>Season Stats</h3>
-        <div style="display:flex;gap:10px;margin-top:10px">
-            <div style="flex:1;background:#eee;padding:10px;border-radius:5px">
-                <small>Rounds</small><div id="stat-r" style="font-size:20px;font-weight:bold">0</div>
-            </div>
-            <div style="flex:1;background:#eee;padding:10px;border-radius:5px">
-                <small>Ace Pot</small><div id="stat-a" style="font-size:20px;font-weight:bold;color:green">$0</div>
-            </div>
-        </div>
+        <div id="stats-view" style="margin-top:10px">Loading...</div>
     </div>
 </div>
 
 <div id="imp" class="screen">
     <div class="card">
-        <input type="file" id="fIn" style="display:none" onchange="process(this)">
+        <input type="file" id="fIn" style="display:none" onchange="processFile(this)">
         <button class="btn btn-blue" onclick="document.getElementById('fIn').click()">UPLOAD UDISC EXCEL</button>
         <div id="preview" style="display:none;margin-top:20px">
-            <h3>Round Leaderboard (Net)</h3>
-            <table id="lTable"><thead><tr><th>Name</th><th>Raw</th><th>Hcp</th><th>Net</th></tr></thead><tbody></tbody></table>
-            <button class="btn btn-blue" onclick="save()">SAVE ROUND TO CLOUD</button>
+            <h3>Leaderboard (Handicapped)</h3>
+            <table id="lTable"><thead><tr><th>Player</th><th>Raw</th><th>Hcp</th><th>Net</th></tr></thead><tbody></tbody></table>
+            <button class="btn btn-blue" onclick="saveData()">CONFIRM & SAVE TO CLOUD</button>
         </div>
     </div>
 </div>
 
 <div id="pay" class="screen">
     <div class="card">
-        <h3>Singles Payouts</h3>
-        <div id="p-out" style="margin-top:10px">Upload a round to calculate.</div>
+        <h3>Payouts</h3>
+        <div id="p-out">Upload a round to calculate.</div>
     </div>
 </div>
 
 <div id="ros" class="screen">
     <div class="card">
-        <div style="display:flex;justify-content:space-between">
-            <h3>Player Roster</h3>
-            <button class="btn-export" onclick="exportCSV()">EXPORT TO SHEETS</button>
+        <div style="display:flex;justify-content:space-between;align-items:center">
+            <h3>League Roster</h3>
+            <button class="btn" style="width:auto;font-size:10px;background:#eee" onclick="exportCSV()">EXPORT CSV</button>
         </div>
         <table id="rTable"><thead><tr><th>Player</th><th>Avg</th><th>Hcp</th><th>Rnds</th></tr></thead><tbody></tbody></table>
     </div>
@@ -86,65 +78,94 @@ const URL='https://gwhffxlfhlssowrbcue.supabase.co';
 const KEY='eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imd3aGZmeGxmaGxsc3Nvd3JiY3VlIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzQ5MTkyNDQsImV4cCI6MjA5MDQ5NTI0NH0.pQd-bcVnBClKoz6WCo5n5pHGLo6Q41zRbe27ekZCxbQ';
 let S = { rounds: [], players: {} };
 
-async function load() {
+async function loadData() {
     try {
         const res = await fetch(`${URL}/rest/v1/league_data?id=eq.season_2026`, {
             headers: {'apikey': KEY, 'Authorization': 'Bearer ' + KEY}
         });
-        const d = await res.json();
-        if(d?.[0]?.data) { S = d[0].data; ui(); document.getElementById('sync-status').textContent = "Synced"; }
-        else { document.getElementById('sync-status').textContent = "Ready (No Data)"; }
-    } catch(e) { document.getElementById('sync-status').textContent = "Local Mode"; }
+        const data = await res.json();
+        if (data && data.length > 0) {
+            S = data[0].data || { rounds: [], players: {} };
+            document.getElementById('sync-status').textContent = "Synced";
+        } else {
+            document.getElementById('sync-status').textContent = "New Season Ready";
+        }
+        updateUI();
+    } catch(e) { 
+        document.getElementById('sync-status').textContent = "Offline Mode";
+        updateUI();
+    }
 }
 
-function process(input) {
+function processFile(input) {
     const reader = new FileReader();
     reader.onload = e => {
         const wb = XLSX.read(e.target.result, {type:'array'});
         const rows = XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]]);
-        const players = rows.filter(r => r.round_total_score > 0);
+        const activePlayers = rows.filter(r => r.round_total_score > 0);
         
-        window.cur = players.map(p => {
-            const h = S.players[p.name]?.rounds || [];
-            const avg = h.length ? h.reduce((a,b)=>a+b,0)/h.length : p.round_total_score;
+        window.currentRoundData = activePlayers.map(p => {
+            const history = S.players[p.name]?.rounds || [];
+            const avg = history.length ? history.reduce((a,b)=>a+b,0)/history.length : p.round_total_score;
             const hcp = Math.max(0, Math.floor((avg - 54) * 0.8)); 
             return { name: p.name, raw: p.round_total_score, hcp: hcp, net: p.round_total_score - hcp };
         }).sort((a,b) => a.net - b.net);
 
-        document.getElementById('lTable').querySelector('tbody').innerHTML = window.cur.map(p => 
-            `<tr><td>${p.name}</td><td>${p.raw}</td><td>-${p.hcp}</td><td><b>${p.net}</b></td></tr>`).join('');
-        
-        const pool = window.cur.length * 5;
-        document.getElementById('p-out').innerHTML = `<p>Pool: $${pool.toFixed(2)}</p><p>1st: $${(pool*.45).toFixed(2)}</p><p>2nd: $${(pool*.33).toFixed(2)}</p><p>3rd: $${(pool*.22).toFixed(2)}</p>`;
+        renderLeaderboard();
         document.getElementById('preview').style.display = 'block';
     };
     reader.readAsArrayBuffer(input.files[0]);
 }
 
-async function save() {
-    if(!window.cur) return;
-    S.rounds.push({ date: new Date().toLocaleDateString(), data: window.cur });
-    window.cur.forEach(p => {
+function renderLeaderboard() {
+    const tbody = document.getElementById('lTable').querySelector('tbody');
+    tbody.innerHTML = window.currentRoundData.map(p => `<tr><td>${p.name}</td><td>${p.raw}</td><td>-${p.hcp}</td><td><b>${p.net}</b></td></tr>`).join('');
+    
+    const pool = window.currentRoundData.length * 5;
+    document.getElementById('p-out').innerHTML = `Pool: $${pool.toFixed(2)} | 1st: $${(pool*.45).toFixed(2)} | 2nd: $${(pool*.33).toFixed(2)} | 3rd: $${(pool*.22).toFixed(2)}`;
+}
+
+async function saveData() {
+    if(!window.currentRoundData) return;
+    
+    // Build new state locally first
+    S.rounds.push({ date: new Date().toLocaleDateString(), data: window.currentRoundData });
+    window.currentRoundData.forEach(p => {
         if(!S.players[p.name]) S.players[p.name] = { rounds: [] };
         S.players[p.name].rounds.push(p.raw);
     });
+
     try {
-        await fetch(`${URL}/rest/v1/league_data`, {
+        const res = await fetch(`${URL}/rest/v1/league_data`, {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json', 'apikey': KEY, 'Authorization': 'Bearer ' + KEY, 'Prefer': 'resolution=merge-duplicates' },
+            headers: { 
+                'Content-Type': 'application/json', 
+                'apikey': KEY, 
+                'Authorization': 'Bearer ' + KEY,
+                'Prefer': 'resolution=merge-duplicates' 
+            },
             body: JSON.stringify({ id: 'season_2026', data: S, updated_at: new Date() })
         });
-        alert("Saved!"); ui();
-    } catch(e) { alert("Local Save Only"); }
+        
+        if (res.ok) {
+            alert("SUCCESS: Saved to Cloud!");
+            updateUI();
+        } else {
+            const err = await res.text();
+            console.error(err);
+            alert("Cloud Error: " + err);
+        }
+    } catch(e) {
+        alert("Network Error - Saved to local session only.");
+    }
 }
 
-function ui() {
-    document.getElementById('stat-r').textContent = S.rounds.length;
-    document.getElementById('stat-a').textContent = "$" + (Object.values(S.players).reduce((a,b)=>a+b.rounds.length, 0));
-    document.getElementById('rTable').querySelector('tbody').innerHTML = Object.entries(S.players).map(([n, d]) => {
+function updateUI() {
+    document.getElementById('stats-view').innerHTML = `Total Rounds: ${S.rounds.length}<br>Ace Pot: $${Object.values(S.players).reduce((a,b)=>a+b.rounds.length, 0)}`;
+    const rBody = document.getElementById('rTable').querySelector('tbody');
+    rBody.innerHTML = Object.entries(S.players).map(([n, d]) => {
         const avg = (d.rounds.reduce((a,b)=>a+b,0)/d.rounds.length).toFixed(1);
-        const hcp = Math.max(0, Math.floor((avg - 54) * 0.8));
-        return `<tr><td>${n}</td><td>${avg}</td><td>${hcp}</td><td>${d.rounds.length}</td></tr>`;
+        return `<tr><td>${n}</td><td>${avg}</td><td>${Math.max(0, Math.floor((avg - 54) * 0.8))}</td><td>${d.rounds.length}</td></tr>`;
     }).join('');
 }
 
@@ -152,13 +173,12 @@ function exportCSV() {
     let csv = "Player,Average,Handicap,Rounds\n";
     Object.entries(S.players).forEach(([n, d]) => {
         const avg = (d.rounds.reduce((a,b)=>a+b,0)/d.rounds.length).toFixed(1);
-        const hcp = Math.max(0, Math.floor((avg - 54) * 0.8));
-        csv += `${n},${avg},${hcp},${d.rounds.length}\n`;
+        csv += `${n},${avg},${Math.max(0, Math.floor((avg - 54) * 0.8))},${d.rounds.length}\n`;
     });
     const blob = new Blob([csv], { type: 'text/csv' });
-    const url = window.URL.createObjectURL(blob);
     const a = document.createElement('a');
-    a.href = url; a.download = 'CedarSwamp_Backup.csv';
+    a.href = window.URL.createObjectURL(blob);
+    a.download = 'CedarSwamp_Roster.csv';
     a.click();
 }
 
@@ -168,7 +188,7 @@ function show(id, btn) {
     document.getElementById(id).classList.add('active');
     btn.classList.add('active');
 }
-load();
+loadData();
 </script>
 </body>
 </html>
