@@ -20,6 +20,7 @@
         td{padding:8px;border-bottom:1px solid #eee}
         .btn{width:100%;padding:12px;border-radius:5px;border:none;font-weight:bold;cursor:pointer;margin-top:10px}
         .btn-blue{background:#1A3A6B;color:#fff}
+        .btn-red{background:#b71c1c;color:#fff;font-size:10px;padding:8px;width:auto;margin-top:20px}
         .status{font-size:10px;padding:3px 8px;border-radius:10px;background:rgba(255,255,255,0.2)}
         .tag{font-size:9px;font-weight:bold;padding:2px 5px;border-radius:4px;text-transform:uppercase}
         .tag-prob{background:#ffecb3;color:#ff6f00}
@@ -49,6 +50,7 @@
     <div class="card">
         <h3>Round History</h3>
         <table id="h-table"><thead><tr><th>Date</th><th>Raw Winner</th><th>Net Winner</th></tr></thead><tbody></tbody></table>
+        <div id="delete-zone"></div>
     </div>
 </div>
 
@@ -103,7 +105,6 @@ function processFile(input) {
             const h = S.players[p.name]?.rounds || [];
             const isM = h.length >= 3;
             const avg = h.length ? h.reduce((a,b)=>a+b,0)/h.length : p.round_total_score;
-            // HANDICAP LOGIC: Locked at 15 Max
             let hcp = isM ? Math.floor((avg - 54) * 0.8) : 0;
             hcp = Math.max(0, Math.min(hcp, 15)); 
             return { name: p.name, raw: p.round_total_score, hcp: hcp, net: p.round_total_score - hcp, isM: isM };
@@ -128,7 +129,7 @@ function calcPayouts() {
     const rawAll = [...window.currentRoundData].sort((a,b)=>a.raw-b.raw);
     const netMembers = [...window.currentRoundData].filter(p => p.isM).sort((a,b)=>a.net-b.net);
 
-    let rSpots = window.currentRoundData.length > 15 ? 3 : window.currentRoundData.length >= 10 ? 3 : 2; 
+    let rSpots = window.currentRoundData.length >= 10 ? 3 : 2; 
     let rSplits = rSpots === 3 ? [0.5, 0.3, 0.2] : [0.6, 0.4];
     
     let nSpots = netMembers.length > 15 ? 4 : netMembers.length > 8 ? 3 : 2;
@@ -138,7 +139,6 @@ function calcPayouts() {
     let usedNames = new Set();
     let availablePrizes = [];
 
-    // Map exact prizes - No Rounding Up
     for(let i=0; i<rSpots; i++) availablePrizes.push({ type: 'Raw', val: Number((rawP * rSplits[i]).toFixed(2)), place: i+1, players: rawAll });
     for(let i=0; i<nSpots; i++) availablePrizes.push({ type: 'Net', val: Number((netP * nSplits[i]).toFixed(2)), place: i+1, players: netMembers });
 
@@ -154,13 +154,35 @@ function calcPayouts() {
         }
     });
 
-    let html = `<h3>Payouts (50/30/20 Tiered)</h3><hr style="margin:10px 0">`;
+    let html = `<h3>Payouts (50/30/20 Exact)</h3><hr style="margin:10px 0">`;
     finalPayouts.sort((a,b) => b.amt - a.amt).forEach(p => {
         html += `<div class="payout-row"><span>${p.place}${p.place==1?'st':p.place==2?'nd':p.place==3?'rd':'th'} ${p.type} - ${p.name}</span><span class="payout-amt">$${p.amt.toFixed(2)}</span></div>`;
     });
-    html += `<div style="margin-top:15px; font-size:10px; color:#666">Field: ${window.currentRoundData.length} | Raw: $${rawP.toFixed(2)} | Net: $${netP.toFixed(2)}</div>`;
+    html += `<div style="margin-top:15px; font-size:10px; color:#666">Field: ${window.currentRoundData.length} | Raw Pool: $${rawP.toFixed(2)}</div>`;
     
     document.getElementById('p-out').innerHTML = html;
+}
+
+async function deleteLastRound() {
+    if (S.rounds.length === 0) return;
+    if (!confirm("Delete the last round and all associated scores? This cannot be undone.")) return;
+
+    const lastRound = S.rounds.pop();
+    lastRound.data.forEach(p => {
+        if (S.players[p.name]) {
+            S.players[p.name].rounds.pop();
+            if (S.players[p.name].rounds.length === 0) delete S.players[p.name];
+        }
+    });
+
+    try {
+        const res = await fetch(`${URL}/rest/v1/league_data`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'apikey': KEY, 'Authorization': 'Bearer ' + KEY, 'Prefer': 'resolution=merge-duplicates' },
+            body: JSON.stringify({ id: 'season_2026', data: S, updated_at: new Date() })
+        });
+        if (res.ok) { alert("Last Round Deleted Successfully."); updateUI(); }
+    } catch(e) { alert("Delete Failed."); }
 }
 
 async function saveData() {
@@ -182,14 +204,17 @@ async function saveData() {
 
 function updateUI() {
     const totalEntries = Object.values(S.players).reduce((a,b)=>a+b.rounds.length, 0);
-    document.getElementById('stats-view').innerHTML = `<b>Total Rounds:</b> ${S.rounds.length}<br><b>Ace Pot:</b> $${totalEntries}`;
+    document.getElementById('stats-view').innerHTML = `<b>Total Rounds Recorded:</b> ${S.rounds.length}<br><b>Current Ace Pot:</b> $${totalEntries}`;
+    
     document.getElementById('h-table').querySelector('tbody').innerHTML = S.rounds.slice().reverse().map(r => `
         <tr><td>${r.date}</td><td>${r.data.sort((a,b)=>a.raw-b.raw)[0].name}</td><td>${r.data.filter(p=>p.isM).sort((a,b)=>a.net-b.net)[0]?.name || '—'}</td></tr>
     `).join('');
+
+    document.getElementById('delete-zone').innerHTML = S.rounds.length > 0 ? `<button class="btn btn-red" onclick="deleteLastRound()">DELETE LAST SAVED ROUND</button>` : '';
+
     document.getElementById('rTable').querySelector('tbody').innerHTML = Object.entries(S.players).map(([n, d]) => {
         const avg = (d.rounds.reduce((a,b)=>a+b,0)/d.rounds.length).toFixed(1);
         const isM = d.rounds.length >= 3;
-        // Roster displays capped handicap
         let hcp = isM ? Math.floor((avg - 54) * 0.8) : 0;
         hcp = Math.max(0, Math.min(hcp, 15));
         return `<tr><td>${n} ${!isM ? '<span class="tag tag-prob">PROB</span>' : ''}</td><td>${avg}</td><td>${isM ? hcp : '—'}</td><td>${d.rounds.length}</td></tr>`;
